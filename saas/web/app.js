@@ -31,18 +31,34 @@ async function loadSections() {
   log(`Loaded ${state.sections.length} Exchange Online sections from API.`);
 }
 
+function setCat(block, open) {
+  block.querySelector(".nav-items").style.display = open ? "" : "none";
+  const c = block.querySelector(".nav-cat");
+  c.setAttribute("aria-expanded", open ? "true" : "false");
+  c.querySelector(".caret").textContent = open ? "\u25BE" : "\u25B8";
+}
 function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
   const cats = {};
   state.sections.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
   Object.keys(cats).sort().forEach(cat => {
-    const d = document.createElement("div"); d.className = "nav-cat"; d.textContent = cat; host.appendChild(d);
+    const block = document.createElement("div");
+    block.className = "nav-block"; block.dataset.cat = cat;
+    const t = document.createElement("button");
+    t.className = "nav-cat";
+    t.innerHTML = `<span class="caret"></span>`;
+    t.appendChild(document.createTextNode(cat));
+    const wrap = document.createElement("div");
+    wrap.className = "nav-items";
     cats[cat].forEach(s => {
       const b = document.createElement("button");
       b.className = "nav-item"; b.textContent = s.navTitle; b.dataset.section = s.id;
       b.onclick = () => openSection(s.id);
-      host.appendChild(b);
+      wrap.appendChild(b);
     });
+    t.onclick = () => setCat(block, wrap.style.display === "none");
+    block.appendChild(t); block.appendChild(wrap); host.appendChild(block);
+    setCat(block, cat === "Mailboxes");
   });
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 }
@@ -304,16 +320,16 @@ document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () =>
 // Top search filters the audit sections in the left nav (Enter opens the first match).
 $("topSearch").oninput = e => {
   const q = e.target.value.trim().toLowerCase();
-  document.querySelectorAll("#navGroups .nav-item").forEach(b => {
-    b.style.display = (!q || b.textContent.toLowerCase().includes(q)) ? "" : "none";
-  });
-  document.querySelectorAll("#navGroups .nav-cat").forEach(c => {
-    let n = c.nextElementSibling, vis = false;
-    while (n && !n.classList.contains("nav-cat")) {
-      if (n.style.display !== "none") { vis = true; break; }
-      n = n.nextElementSibling;
-    }
-    c.style.display = (vis || !q) ? "" : "none";
+  document.querySelectorAll("#navGroups .nav-block").forEach(block => {
+    const items = [...block.querySelectorAll(".nav-item")];
+    let vis = 0;
+    items.forEach(b => {
+      const show = !q || b.textContent.toLowerCase().includes(q);
+      b.style.display = show ? "" : "none";
+      if (show) vis++;
+    });
+    block.style.display = (vis || !q) ? "" : "none";
+    setCat(block, q ? vis > 0 : block.dataset.cat === "Mailboxes");
   });
 };
 $("topSearch").onkeydown = e => {
