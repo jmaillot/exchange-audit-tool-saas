@@ -15,7 +15,7 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 * `POST /api/jobs` — validates `selection` against the allow-list (no raw PS accepted), builds the script with the shared `BuildScript()`, forwards to worker with the Bearer token in memory only.
 * `GET /api/jobs/{id}` — status + 200-row preview + log tail.
 * `GET /api/jobs/{id}/download?format=csv|xlsx` — export files.
-* Worker `POST /run` — `Connect-ExchangeOnline -AccessToken …` (or `Connect-IPPSSession` for protection), runs the script, `Export-Csv -Delimiter ';'`, disconnects, drops the token.
+* Worker `POST /run` — `Connect-ExchangeOnline -AccessToken …` (or `Connect-IPPSSession` for protection), runs the script, `Export-Csv -Delimiter ';'`, disconnects, drops the token. Outputs stay on the worker until the API pulls them (`GET /file/{job}?kind=csv|log`, then `DELETE`); storages are never shared, so nothing persists past the containers.
 
 ## 1. One-time multi-tenant app registration (you, the publisher)
 

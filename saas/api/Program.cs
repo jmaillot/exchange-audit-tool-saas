@@ -146,29 +146,56 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
     File.WriteAllText(Path.Combine(dataDir, jobId + ".script.ps1"), auditBody, new UTF8Encoding(true));
 
     // Dispatch to worker (fire and forget; status polled via GET).
+    // Storages are NOT shared (tmpfs per container in production), so the
+    // API pulls the outputs back over HTTP after a successful run.
     _ = Task.Run(async () =>
     {
+        using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(32) };
+        string baseUrl = workerUrl.TrimEnd('/');
         try
         {
             job.Status = "running";
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(32) };
             var payload = JsonSerializer.Serialize(new { jobId, organization = org, script = auditBody, includeXlsx });
-            using var fwd = new HttpRequestMessage(HttpMethod.Post, workerUrl.TrimEnd('/') + "/run");
+            using var fwd = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/run");
             fwd.Content = new StringContent(payload, Encoding.UTF8, "application/json");
             fwd.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
             var resp = await http.SendAsync(fwd);
             string respText = await resp.Content.ReadAsStringAsync();
             if (!resp.IsSuccessStatusCode)
             {
+                string err = respText, tail = "";
+                try
+                {
+                    using var d = JsonDocument.Parse(respText);
+                    if (d.RootElement.TryGetProperty("error", out var e)) err = e.GetString() ?? err;
+                    if (d.RootElement.TryGetProperty("log", out var l)) tail = l.GetString() ?? "";
+                }
+                catch { }
                 job.Status = "failed";
-                job.Error = "worker " + (int)resp.StatusCode + ": " + respText;
+                job.Error = "worker " + (int)resp.StatusCode + ": " + err;
+                job.Log = tail;
+                return;
             }
-            else
+            try
             {
-                // Worker writes /data/<job>.csv (+ .xlsx) and status.json.
-                job.Status = "succeeded";
-                if (includeXlsx) TryConvertToXlsx(csvPath);
+                using var csvResp = await http.GetAsync(baseUrl + "/file/" + jobId + "?kind=csv",
+                    HttpCompletionOption.ResponseHeadersRead);
+                csvResp.EnsureSuccessStatusCode();
+                using var fs = File.Create(csvPath);
+                await (await csvResp.Content.ReadAsStreamAsync()).CopyToAsync(fs);
             }
+            catch (Exception ex)
+            {
+                job.Status = "failed";
+                job.Error = "fetch CSV from worker: " + ex.Message;
+                return;
+            }
+            try { job.Log = await http.GetStringAsync(baseUrl + "/file/" + jobId + "?kind=log"); }
+            catch { }
+            try { await http.DeleteAsync(baseUrl + "/file/" + jobId); }
+            catch { }
+            job.Status = "succeeded";
+            if (includeXlsx) TryConvertToXlsx(csvPath);
         }
         catch (Exception ex)
         {
@@ -206,10 +233,10 @@ app.MapGet("/api/jobs/{id}", (string id) =>
         }
         catch { }
     }
-    // Worker-side log tail.
-    string log = "";
+    // Worker-side log: attached by the dispatcher, else shared-volume tail.
+    string log = job.Log ?? "";
     string logPath = Path.Combine(dataDir, id + ".log");
-    if (File.Exists(logPath)) { try { var t = File.ReadAllText(logPath); log = t.Length > 8000 ? t.Substring(t.Length - 8000) : t; } catch { } }
+    if (string.IsNullOrEmpty(log) && File.Exists(logPath)) { try { var t = File.ReadAllText(logPath); log = t.Length > 8000 ? t.Substring(t.Length - 8000) : t; } catch { } }
     return Results.Json(new
     {
         jobId = id,
@@ -287,6 +314,7 @@ sealed class JobRecord
     public string Organization = "";
     public string Status = "queued";
     public string Error = "";
+    public string Log = "";
     public bool IncludeXlsx;
     public DateTime CreatedUtc;
 }

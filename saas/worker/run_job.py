@@ -17,6 +17,7 @@ import re
 import subprocess
 import tempfile
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from urllib.parse import urlparse, parse_qs
 
 DATA = os.environ.get("EAT_DATA_DIR", "/data")
 DEMO = os.environ.get("EAT_DEMO_MODE", "false").lower() == "true"
@@ -43,6 +44,15 @@ def demo_csv(job_id, script):
             w.writerow([f"demo-{c.lower()}-{i}" for c in cols])
     with open(os.path.join(DATA, job_id + ".log"), "w", encoding="utf-8") as f:
         f.write("DEMO MODE: no Exchange connection, 3 sample rows written.\n")
+
+
+def read_tail(job_id, max_chars=6000):
+    try:
+        with open(os.path.join(DATA, job_id + ".log"), encoding="utf-8") as f:
+            t = f.read()
+        return t[-max_chars:] if len(t) > max_chars else t
+    except OSError:
+        return ""
 
 
 def run_real(job_id, org, script, token):
@@ -94,8 +104,48 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/health":
             self._json(200, {"ok": True, "demoMode": DEMO})
-        else:
-            self._json(404, {"error": "not found"})
+            return
+        # Serve job outputs (the API pulls them; storages are not shared).
+        u = urlparse(self.path)
+        if u.path.startswith("/file/"):
+            job_id = re.sub(r"[^a-z0-9]", "", u.path[len("/file/"):].lower())
+            kind = parse_qs(u.query).get("kind", [""])[0]
+            if not job_id or kind not in ("csv", "log"):
+                self._json(422, {"error": "job and kind=csv|log required"})
+                return
+            path = os.path.join(DATA, job_id + (".csv" if kind == "csv" else ".log"))
+            if not os.path.exists(path):
+                self._json(404, {"error": "not found"})
+                return
+            try:
+                with open(path, "rb") as f:
+                    body = f.read()
+            except OSError as ex:
+                self._json(500, {"error": str(ex)})
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/csv" if kind == "csv" else "text/plain; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self._json(404, {"error": "not found"})
+
+    def do_DELETE(self):
+        u = urlparse(self.path)
+        if u.path.startswith("/file/"):
+            job_id = re.sub(r"[^a-z0-9]", "", u.path[len("/file/"):].lower())
+            if not job_id:
+                self._json(422, {"error": "job required"})
+                return
+            for ext in (".csv", ".log"):
+                try:
+                    os.unlink(os.path.join(DATA, job_id + ext))
+                except OSError:
+                    pass
+            self._json(200, {"ok": True})
+            return
+        self._json(404, {"error": "not found"})
 
     def do_POST(self):
         if self.path != "/run":
@@ -128,9 +178,9 @@ class Handler(BaseHTTPRequestHandler):
                 run_real(job_id, org, script, token)
             self._json(200, {"ok": True})
         except subprocess.TimeoutExpired:
-            self._json(500, {"error": "audit timed out"})
+            self._json(500, {"error": "audit timed out", "log": read_tail(job_id)})
         except Exception as ex:
-            self._json(500, {"error": str(ex)})
+            self._json(500, {"error": str(ex), "log": read_tail(job_id)})
         finally:
             token = ""
 

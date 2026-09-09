@@ -127,6 +127,7 @@ function selection() {
 }
 function resetResults() {
   $("grid").innerHTML = ""; $("resultInfo").textContent = "No results yet.";
+  $("jobLog").textContent = ""; $("jobLog").classList.add("hidden");
   $("dlCsv").disabled = $("dlXlsx").disabled = true;
 }
 
@@ -149,8 +150,10 @@ function pollStart() {
   state.poll = setInterval(async () => {
     const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
     const j = await r.json();
-    $("resultInfo").textContent = `Status: ${j.status}${j.error ? " - " + j.error : ""}`;
-    if (j.header) renderGrid(j.header, j.preview || []);
+    const note = `Status: ${j.status} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
+    if (j.header) renderGrid(j.header, j.preview || [], note);
+    else $("resultInfo").textContent = note;
+    if (j.log) { $("jobLog").textContent = j.log.slice(-8000); $("jobLog").classList.remove("hidden"); }
     if (j.status === "succeeded" || j.status === "failed") {
       pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
       $("dlCsv").disabled = !j.hasCsv; $("dlXlsx").disabled = !j.hasXlsx;
@@ -159,7 +162,7 @@ function pollStart() {
   }, 3000);
 }
 function pollStop() { if (state.poll) clearInterval(state.poll); state.poll = null; }
-function renderGrid(header, rows) {
+function renderGrid(header, rows, note) {
   const t = $("grid"); t.innerHTML = "";
   const trh = document.createElement("tr");
   header.forEach(h => { const th = document.createElement("th"); th.textContent = h; th.title = h; trh.appendChild(th); });
@@ -169,7 +172,7 @@ function renderGrid(header, rows) {
     r.forEach(c => { const td = document.createElement("td"); td.textContent = c ?? ""; td.title = c ?? ""; tr.appendChild(td); });
     t.appendChild(tr);
   });
-  $("resultInfo").textContent = `${rows.length} rows (preview of first 200). ` + $("resultInfo").textContent;
+  $("resultInfo").textContent = `${rows.length} rows (preview of first 200). ` + (note || "");
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
