@@ -156,7 +156,7 @@ function resetResults() {
 async function runAudit() {
   if (!state.token || !state.org) { alert("Connect first (token + tenant organization)."); showView("home"); return; }
   try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expired, please reconnect."; log("Token refresh failed: " + (e.message || e)); return; }
-  const body = { sectionId: state.current.id, selection: selection(), organization: state.org, includeXlsx: true };
+  const body = { sectionId: state.current.id, selection: selection(), organization: state.org, includeXlsx: true, smartMode: $("smartMode").checked };
   log(`RUN ${body.sectionId} selection=${JSON.stringify(body.selection)}`);
   $("runBtn").disabled = true; $("cancelBtn").disabled = false;
   $("resultInfo").textContent = "Queued...";

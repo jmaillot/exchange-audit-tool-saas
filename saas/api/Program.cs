@@ -131,6 +131,9 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
     if (!anySelected)
         return Results.Json(new { error = "Select at least one property before running the audit." }, statusCode: 422);
 
+    bool smartMode = true;
+    if (root.TryGetProperty("smartMode", out var sm)) smartMode = sm.GetBoolean();
+
     string jobId = Guid.NewGuid().ToString("N");
     string csvPath = Path.Combine(dataDir, jobId + ".csv");
     // Generate the audit body with the shared audit-DSL logic. CsvPath here is the
@@ -196,6 +199,12 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
             }
             try { job.Log = await http.GetStringAsync(baseUrl + "/file/" + jobId + "?kind=log"); }
             catch { }
+            if (smartMode)
+            {
+                var dropped = PruneEmptyColumns(csvPath);
+                if (dropped.Count > 0)
+                    job.Log += "\n[smart-mode] dropped " + dropped.Count + " empty column(s): " + string.Join(",", dropped);
+            }
             try { await http.DeleteAsync(baseUrl + "/file/" + jobId); }
             catch { }
             job.Status = "succeeded";
@@ -273,6 +282,53 @@ app.MapGet("/api/jobs/{id}/download", (string id, string format) =>
 });
 
 app.Run();
+
+// Smart mode (every section): drop CSV columns empty on all rows, mirroring
+// the transport-rules auto-detect UX. Returns the dropped column names.
+static List<string> PruneEmptyColumns(string csvPath)
+{
+    var dropped = new List<string>();
+    string[] lines;
+    try { lines = File.ReadAllLines(csvPath, Encoding.UTF8); }
+    catch { return dropped; }
+    if (lines.Length < 2) return dropped;
+    var header = ParseDelimited(lines[0], ';');
+    if (header.Count > 0 && header[0].Length > 0 && header[0][0] == '\uFEFF')
+        header[0] = header[0].Substring(1); // keep BOM out of the first column name
+    int cols = header.Count;
+    if (cols == 0) return dropped;
+    var rows = new List<List<string>>();
+    foreach (string ln in lines.Skip(1))
+    {
+        var r = ParseDelimited(ln, ';');
+        if (r.Count != cols) return new List<string>(); // unexpected shape: leave file untouched
+        rows.Add(r);
+    }
+    var keep = new bool[cols];
+    for (int c = 0; c < cols; c++)
+    {
+        foreach (var r in rows)
+            if (!string.IsNullOrWhiteSpace(r[c])) { keep[c] = true; break; }
+        if (!keep[c]) dropped.Add(header[c]);
+    }
+    if (dropped.Count == 0 || dropped.Count == cols) return new List<string>();
+    var keptIdx = Enumerable.Range(0, cols).Where(c => keep[c]).ToList();
+    var sb = new StringBuilder();
+    sb.AppendLine(string.Join(";", keptIdx.Select(c => CsvCell(header[c]))));
+    foreach (var r in rows)
+        sb.AppendLine(string.Join(";", keptIdx.Select(c => CsvCell(r[c]))));
+    try { File.WriteAllText(csvPath, sb.ToString(), new UTF8Encoding(true)); }
+    catch { return new List<string>(); }
+    return dropped;
+}
+
+static string CsvCell(string v)
+{
+    v ??= "";
+    if (v.Contains(';') || v.Contains('"') || v.Contains('\r') || v.Contains('\n'))
+        return "\"" + v.Replace("\"", "\"\"") + "\"";
+    return v;
+}
 
 // Minimal ;-delimited parser (quotes per Export-Csv).
 static List<string> ParseDelimited(string line, char delim)

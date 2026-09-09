@@ -46,7 +46,7 @@ Real Exchange run: set `EAT_DEMO_MODE=false`, restart worker. The worker image p
 
 1. Open the web app → Home → enter your **work email (UPN)** → **Connect with Microsoft** and sign in. Tenant org is pre-filled from your email domain (editable). Token stays in browser memory (MSAL memory cache); Disconnect drops it. No token copy-paste — the **Advanced** section keeps manual paste as fallback.
 2. Pick a section in the left nav (grouped by category, e.g. Mailboxes, Groups, Protection). Each section offers property groups with Online defaults, `Filter`, `Select all` and an amber `Slow options` warning.
-3. Set output filename, keep `XLSX` checked if wanted, press **RUN AUDIT**. Poll `GET /api/jobs/{id}` every 3s; preview shows the first 200 rows.
+3. Press **RUN AUDIT**. **Smart mode** (toolbar, on by default) drops columns empty on every row — same idea as the transport-rules auto-detect, applied to all sections (dropped columns are listed in the job log). Poll `GET /api/jobs/{id}` every 3s; preview shows the first 200 rows.
 4. **Download CSV / XLSX**. CSV is `;`-delimited UTF-8 (multi-values `,`-joined); XLSX has bold header, filter, frozen top row.
 5. **Activity log** view shows the executed (redacted: `-AccessToken ***`, never the token) commands and job output.
 
