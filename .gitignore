@@ -38,3 +38,13 @@ graphify-out/
 bin/
 obj/
 *.dll
+
+# SaaS local env (tenant/org settings, never commit)
+saas/.env
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local-only legacy copy, never pushed
+_archive/

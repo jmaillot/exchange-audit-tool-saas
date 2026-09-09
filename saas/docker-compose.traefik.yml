@@ -1,0 +1,91 @@
+# Production: Exchange Audit SaaS behind Traefik. STANDALONE file (does not
+# extend docker-compose.yml) — run it directly:
+#
+#   cp .env.example .env   # set EAT_DEMO_MODE=false for real audits
+#   # edit the Host() rule below, then:
+#   docker compose -f docker-compose.traefik.yml up --build -d
+#
+# Ephemeral by design: /data is a tmpfs mount (RAM) on `api` and `worker`,
+# no named volumes. Recreating or stopping the containers wipes all job
+# scripts, CSVs, XLSX files and logs. Nothing is retained on disk.
+# Tune the tmpfs size below if you run very large (Unlimited) audits.
+#
+# Only `web` is exposed (labels below). `api` and `worker` stay internal
+# (traefik.enable=false) on the external `macvlan_proxy` network.
+# Assumes Traefik with an `https` entrypoint and file-provider chains.
+
+services:
+  web:
+    build: ./web
+    container_name: exchange-audit-web
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Europe/Paris
+    # No ports: Traefik routes to the container directly.
+    restart: unless-stopped
+    networks:
+      - macvlan_proxy
+    labels:
+      - "traefik.enable=true" # Explicitly tell Traefik to expose this container
+      ## Container routers
+      - "traefik.http.routers.exchange-audit-rtr.entrypoints=https" # listen on https
+      - "traefik.http.routers.exchange-audit-rtr.rule=Host(`audit.example.domain.fr`)" # https hostname
+      - "traefik.http.routers.exchange-audit-rtr.service=exchange-audit-svc"
+      ## Container Service
+      - "traefik.http.services.exchange-audit-svc.loadbalancer.server.port=80" # nginx listening port inside container
+      - "traefik.docker.network=macvlan_proxy"
+      ## Container Middlewares
+      - "traefik.http.routers.exchange-audit-rtr.middlewares=chain-authentik@file"
+
+  api:
+    build: ./api
+    container_name: exchange-audit-api
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Europe/Paris
+      - EAT_DATA_DIR=/data
+      - EAT_WORKER_URL=http://worker:8081
+    tmpfs:
+      - /data:size=2g,mode=1777 # ephemeral job storage, wiped with the container
+    # Internal only, reachable by `web` as http://api:8080.
+    expose:
+      - 8080
+    restart: unless-stopped
+    depends_on:
+      - worker
+    networks:
+      - macvlan_proxy
+    labels:
+      - "traefik.enable=false"
+
+  worker:
+    build: ./worker
+    container_name: exchange-audit-worker
+    env_file: .env
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      - PUID=1026
+      - PGID=100
+      - TZ=Europe/Paris
+      - EAT_DATA_DIR=/data
+      - EAT_AUDIT_TIMEOUT_SEC=1800
+    tmpfs:
+      - /data:size=2g,mode=1777 # ephemeral job storage, wiped with the container
+    restart: unless-stopped
+    networks:
+      - macvlan_proxy
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  macvlan_proxy:
+    external: true

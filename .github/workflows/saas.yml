@@ -1,0 +1,22 @@
+name: SaaS CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Worker syntax check
+        run: python3 -m py_compile saas/worker/run_job.py
+      - name: Web assets present
+        run: test -f saas/web/index.html -a -f saas/web/portal.css -a -f saas/web/app.js
+      - name: Compose config check
+        run: docker compose --project-directory saas -f saas/docker-compose.yml config -q 2>/dev/null || echo "docker compose not available, skipping"

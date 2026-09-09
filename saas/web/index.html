@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Microsoft Azure - Exchange Audit</title>
+<link rel="stylesheet" href="portal.css">
+</head>
+<body>
+<header class="topbar">
+  <button class="icon-btn" id="hamburger" aria-label="Menu">&#9776;</button>
+  <span class="brand">Microsoft Azure</span>
+  <div class="topsearch"><input id="topSearch" type="search" placeholder="Search resources, services, and docs" aria-label="Search"></div>
+  <div class="topright">
+    <span id="connDot" class="dot" title="Not connected"></span>
+    <span id="connText">Not connected</span>
+    <button class="icon-btn" aria-label="Account">&#9679;</button>
+  </div>
+</header>
+<div class="shell">
+  <nav class="sidenav" id="sidenav" aria-label="Navigation">
+    <div class="nav-section">Home</div>
+    <button class="nav-item active" data-view="home">Home</button>
+    <div class="nav-section">Exchange audit</div>
+    <div id="navGroups"></div>
+    <div class="nav-section">Monitor</div>
+    <button class="nav-item" data-view="activity">Activity log</button>
+  </nav>
+  <main class="content">
+    <div id="view-home" class="view">
+      <div class="breadcrumb">Home &gt; Exchange Audit</div>
+      <h1>Exchange Audit</h1>
+      <div class="card">
+        <h2>Connect with Microsoft</h2>
+        <p class="muted">Single multi-tenant Entra app. Sign in with an Exchange reader account (e.g. View-Only Organization Management). The access token lives in memory only and is dropped on disconnect.</p>
+        <label>Tenant organization
+          <input id="org" placeholder="contoso.onmicrosoft.com" autocomplete="off">
+        </label>
+        <label>Access token (EXO, audience https://outlook.office365.com)
+          <input id="token" type="password" placeholder="Paste Bearer token from your login flow" autocomplete="off">
+        </label>
+        <div class="row">
+          <button id="connectBtn" class="btn-primary">Connect</button>
+          <button id="disconnectBtn" class="btn">Disconnect &amp; drop token</button>
+          <span id="homeStatus" class="muted"></span>
+        </div>
+        <p class="muted small">Admin consent (once per tenant): <code>https://login.microsoftonline.com/organizations/adminconsent?client_id=&lt;YOUR-APP-ID&gt;</code>. See <code>saas/README.md</code> for the one-time app setup.</p>
+      </div>
+      <div class="card">
+        <h2>Coverage (Exchange Online, 25 sections)</h2>
+        <div id="coverage" class="coverage"></div>
+      </div>
+    </div>
+    <div id="view-section" class="view hidden">
+      <div class="breadcrumb"><a href="#" id="crumbHome">Home</a> &gt; <span id="crumbSection"></span></div>
+      <h1 id="secTitle"></h1>
+      <p class="muted" id="secSub"></p>
+      <div class="toolbar">
+        <span id="scopeBadge" class="badge"></span>
+        <span id="slowBadge" class="badge warn hidden">Slow options selected - this run may take longer</span>
+        <span class="spacer"></span>
+        <input id="filter" type="search" placeholder="Filter options" aria-label="Filter options">
+        <button id="selectAll" class="btn">Select all</button>
+      </div>
+      <div class="columns">
+        <div class="left">
+          <div id="groups"></div>
+          <div class="card row">
+            <label class="grow">Output file <input id="outFile" autocomplete="off"></label>
+            <label class="check"><input type="checkbox" id="xlsx" checked> XLSX</label>
+          </div>
+          <div class="row">
+            <button id="runBtn" class="btn-primary">RUN AUDIT</button>
+            <button id="cancelBtn" class="btn" disabled>Cancel</button>
+          </div>
+        </div>
+        <div class="right">
+          <div class="card">
+            <div class="row">
+              <h2>Results preview</h2>
+              <span class="spacer"></span>
+              <button id="dlCsv" class="btn" disabled>Download CSV</button>
+              <button id="dlXlsx" class="btn" disabled>Download XLSX</button>
+            </div>
+            <div id="resultInfo" class="muted">No results yet.</div>
+            <div class="grid-wrap"><table id="grid" aria-label="Results"></table></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div id="view-activity" class="view hidden">
+      <div class="breadcrumb">Home &gt; Activity log</div>
+      <h1>Activity log</h1>
+      <div class="card"><pre id="activityLog" class="log"></pre></div>
+    </div>
+  </main>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

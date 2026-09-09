@@ -1,0 +1,24 @@
+services:
+  api:
+    build: ./api
+    ports: ["8080:8080"]
+    environment:
+      EAT_DATA_DIR: /data
+      EAT_WORKER_URL: http://worker:8081
+    volumes: [audit-data:/data]
+    depends_on: [worker]
+  worker:
+    build: ./worker
+    environment:
+      EAT_DATA_DIR: /data
+      EAT_AUDIT_TIMEOUT_SEC: 1800
+      # true = fake CSVs without Exchange (UI testing). false = real EXO calls.
+      EAT_DEMO_MODE: ${EAT_DEMO_MODE:-false}
+    volumes: [audit-data:/data]
+  web:
+    build: ./web
+    ports: ["${WEB_PORT:-3000}:80"]
+    depends_on: [api]
+
+volumes:
+  audit-data:
