@@ -257,13 +257,19 @@ app.MapGet("/api/jobs/{id}", (string id) =>
 
 app.MapGet("/api/jobs/{id}/download", (string id, string format) =>
 {
+    if (!jobs.TryGetValue(id, out var job)) return Results.NotFound();
     string ext = (format ?? "csv").ToLowerInvariant() == "xlsx" ? ".xlsx" : ".csv";
     string path = Path.Combine(dataDir, id + ext);
     if (!File.Exists(path)) return Results.NotFound();
     string ct = ext == ".xlsx"
         ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         : "text/csv";
-    return Results.File(path, ct, id + ext);
+    string baseName = "audit";
+    var section = onlineSections.FirstOrDefault(s => s.Id == job.SectionId);
+    if (section != null && !string.IsNullOrEmpty(section.DefaultFileName))
+        baseName = Path.GetFileNameWithoutExtension(section.DefaultFileName);
+    string stamp = File.GetLastWriteTimeUtc(path).ToString("yyyyMMdd-HHmmss");
+    return Results.File(path, ct, baseName + "-" + stamp + ext);
 });
 
 app.Run();
