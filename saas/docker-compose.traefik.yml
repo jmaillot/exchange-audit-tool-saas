@@ -39,7 +39,7 @@ services:
       - "traefik.http.services.exchange-audit-svc.loadbalancer.server.port=80" # nginx listening port inside container
       - "traefik.docker.network=macvlan_proxy"
       ## Container Middlewares
-      - "traefik.http.routers.exchange-audit-rtr.middlewares=chain-authentik@file"
+      - "traefik.http.routers.exchange-audit-rtr.middlewares=chain-no-auth@file"
 
   api:
     build: ./api
