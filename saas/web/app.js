@@ -1,6 +1,6 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, token: "", tokenExp: 0, org: "", upn: "", jobId: null, poll: null, msal: null, msalAccount: null };
+const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, poll: null, msal: null, msalAccount: null };
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
   { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"] },
@@ -95,6 +95,24 @@ function openSection(id) {
 function renderGroups(filter) {
   const host = $("groups"); host.innerHTML = "";
   const f = (filter || "").toLowerCase();
+  // Smart mode block (same look as transport-rules' native one). Sections that
+  // already define their own (key "auto") keep it; the flag is read in runAudit.
+  const nativeSmart = state.current.groups.some(g => g.key === "auto" || (g.title || "").toLowerCase().includes("smart"));
+  if (!nativeSmart) {
+    const label = "Auto-detect populated properties only (recommended)";
+    if (!f || "smart mode".includes(f) || label.toLowerCase().includes(f)) {
+      const card = document.createElement("div"); card.className = "card grp";
+      card.innerHTML = `<h3>Smart mode</h3><div class="hint">Keeps only columns that have a value on at least one row.</div>`;
+      const opts = document.createElement("div"); opts.className = "opts";
+      const lbl = document.createElement("label"); lbl.className = "opt";
+      const inp = document.createElement("input");
+      inp.type = "checkbox"; inp.checked = state.smartMode;
+      inp.onchange = () => { state.smartMode = inp.checked; };
+      lbl.appendChild(inp);
+      lbl.appendChild(document.createTextNode(label + " "));
+      opts.appendChild(lbl); card.appendChild(opts); host.appendChild(card);
+    }
+  }
   state.current.groups.forEach(g => {
     const options = g.options || [];
     const visible = options.filter(o => o.label.toLowerCase().includes(f));
@@ -156,7 +174,10 @@ function resetResults() {
 async function runAudit() {
   if (!state.token || !state.org) { alert("Connect first (token + tenant organization)."); showView("home"); return; }
   try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expired, please reconnect."; log("Token refresh failed: " + (e.message || e)); return; }
-  const body = { sectionId: state.current.id, selection: selection(), organization: state.org, includeXlsx: true, smartMode: $("smartMode").checked };
+  const sel = selection();
+  const nativeAuto = state.current.groups.some(g => g.key === "auto");
+  const smart = nativeAuto ? (sel.auto || []).includes("autodetect") : state.smartMode;
+  const body = { sectionId: state.current.id, selection: sel, organization: state.org, includeXlsx: true, smartMode: smart };
   log(`RUN ${body.sectionId} selection=${JSON.stringify(body.selection)}`);
   $("runBtn").disabled = true; $("cancelBtn").disabled = false;
   $("resultInfo").textContent = "Queued...";
