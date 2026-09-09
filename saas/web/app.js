@@ -299,5 +299,27 @@ $("dlCsv").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/down
 $("dlXlsx").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=xlsx", "_blank");
 document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 
+// Top search filters the audit sections in the left nav (Enter opens the first match).
+$("topSearch").oninput = e => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll("#navGroups .nav-item").forEach(b => {
+    b.style.display = (!q || b.textContent.toLowerCase().includes(q)) ? "" : "none";
+  });
+  document.querySelectorAll("#navGroups .nav-cat").forEach(c => {
+    let n = c.nextElementSibling, vis = false;
+    while (n && !n.classList.contains("nav-cat")) {
+      if (n.style.display !== "none") { vis = true; break; }
+      n = n.nextElementSibling;
+    }
+    c.style.display = (vis || !q) ? "" : "none";
+  });
+};
+$("topSearch").onkeydown = e => {
+  if (e.key === "Enter") {
+    const first = [...document.querySelectorAll("#navGroups .nav-item")].find(b => b.style.display !== "none");
+    if (first) first.click();
+  }
+};
+
 loadSections().catch(e => { log("API unreachable: " + e.message); $("coverage").textContent = "API unreachable."; });
 updateRegisterLink();
