@@ -65,7 +65,6 @@ function openSection(id) {
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
-  $("outFile").value = s.defaultFileName;
   $("filter").value = "";
   renderGroups("");
   updateSlow(); pollStop(); resetResults();
