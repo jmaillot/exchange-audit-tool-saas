@@ -127,6 +127,10 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
     bool includeXlsx = true;
     if (root.TryGetProperty("includeXlsx", out var xlsx)) includeXlsx = xlsx.GetBoolean();
 
+    bool anySelected = section.Groups.Any(g => sel.Selected(g.Key).Count > 0);
+    if (!anySelected)
+        return Results.Json(new { error = "Select at least one property before running the audit." }, statusCode: 422);
+
     string jobId = Guid.NewGuid().ToString("N");
     string csvPath = Path.Combine(dataDir, jobId + ".csv");
     // Generate the audit body with the shared audit-DSL logic. CsvPath here is the

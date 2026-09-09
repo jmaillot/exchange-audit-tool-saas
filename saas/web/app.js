@@ -58,6 +58,7 @@ function showView(v) {
 }
 
 function openSection(id) {
+  try {
   const s = state.sections.find(x => x.id === id); if (!s) return;
   state.current = s; state.checks = {};
   showView("section");
@@ -68,18 +69,20 @@ function openSection(id) {
   $("filter").value = "";
   renderGroups("");
   updateSlow(); pollStop(); resetResults();
+  } catch (e) { log("Failed to open section: " + (e.message || e)); }
 }
 
 function renderGroups(filter) {
   const host = $("groups"); host.innerHTML = "";
   const f = (filter || "").toLowerCase();
   state.current.groups.forEach(g => {
-    const visible = g.options.filter(o => o.label.toLowerCase().includes(f));
+    const options = g.options || [];
+    const visible = options.filter(o => o.label.toLowerCase().includes(f));
     if (f && visible.length === 0) return;
     const card = document.createElement("div"); card.className = "card grp";
     card.innerHTML = `<h3>${esc(g.title)}</h3>${g.hint ? `<div class="hint">${esc(g.hint)}</div>` : ""}`;
     const opts = document.createElement("div"); opts.className = "opts";
-    g.options.forEach(o => {
+    options.forEach(o => {
       const key = g.key + "::" + o.value;
       if (!(key in state.checks)) state.checks[key] = !!o.defaultChecked;
       const lbl = document.createElement("label"); lbl.className = "opt" + (f && !o.label.toLowerCase().includes(f) ? " dim" : "");
@@ -88,7 +91,7 @@ function renderGroups(filter) {
       inp.name = "g_" + g.key; inp.checked = state.checks[key];
       inp.onchange = () => {
         if (g.mode === "SingleChoice") {
-          g.options.forEach(x => state.checks[g.key + "::" + x.value] = (x.value === o.value));
+          options.forEach(x => state.checks[g.key + "::" + x.value] = (x.value === o.value));
           renderGroups($("filter").value);
         } else state.checks[key] = inp.checked;
         updateSlow(); updateSelectAll();
@@ -104,14 +107,14 @@ function renderGroups(filter) {
 }
 
 function updateSlow() {
-  const slow = state.current.groups.some(g => g.options.some(o => (o.slow || g.slow) && state.checks[g.key + "::" + o.value]));
+  const slow = state.current.groups.some(g => (g.options || []).some(o => (o.slow || g.slow) && state.checks[g.key + "::" + o.value]));
   $("slowBadge").classList.toggle("hidden", !slow);
 }
 function updateSelectAll() {
   const keys = Object.keys(state.checks).filter(k => {
     const [gk, v] = k.split("::");
     const g = state.current.groups.find(x => x.key === gk);
-    const o = g && g.options.find(x => x.value === v);
+    const o = g && ((g.options || []).find(x => x.value === v));
     return o && o.label.toLowerCase().includes(($("filter").value || "").toLowerCase()) && g.mode !== "SingleChoice";
   });
   const on = keys.filter(k => state.checks[k]).length;
@@ -120,7 +123,7 @@ function updateSelectAll() {
 function selection() {
   const sel = {};
   state.current.groups.forEach(g => {
-    sel[g.key] = g.options.filter(o => state.checks[g.key + "::" + o.value]).map(o => o.value);
+    sel[g.key] = (g.options || []).filter(o => state.checks[g.key + "::" + o.value]).map(o => o.value);
   });
   return sel;
 }
@@ -180,7 +183,7 @@ $("selectAll").onclick = () => {
   const keys = [];
   state.current.groups.forEach(g => {
     if (g.mode === "SingleChoice") return;
-    g.options.forEach(o => { if (o.label.toLowerCase().includes(f)) keys.push(g.key + "::" + o.value); });
+    (g.options || []).forEach(o => { if (o.label.toLowerCase().includes(f)) keys.push(g.key + "::" + o.value); });
   });
   const target = keys.some(k => !state.checks[k]);
   keys.forEach(k => state.checks[k] = target);
