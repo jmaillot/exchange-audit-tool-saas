@@ -54,8 +54,10 @@ input[type=text],input:not([type]),input[type=search],input[type=password]{width
 .opt .slow{font-size:11px;color:var(--warn)}
 .grid-wrap{overflow:auto;max-height:520px;border:1px solid var(--border)}
 table{border-collapse:collapse;width:100%;font-size:12px}
-th{position:sticky;top:0;background:#faf9f8;border-bottom:1px solid var(--border);text-align:left;padding:6px 8px;white-space:nowrap}
-td{border-bottom:1px solid var(--border);padding:5px 8px;white-space:nowrap;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;background:#faf9f8;border-bottom:1px solid var(--border);text-align:left;padding:6px 8px;white-space:nowrap;min-width:140px}
+td{border-bottom:1px solid var(--border);padding:5px 8px;white-space:nowrap;min-width:140px;max-width:320px;overflow:hidden;text-overflow:ellipsis}
+th:first-child,td:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:1px 0 0 var(--border)}
+th:first-child{background:#faf9f8;z-index:2}
 .log{background:#1b1a19;color:#d2d0ce;padding:12px;max-height:60vh;overflow:auto;font-size:12px;white-space:pre-wrap}
 .coverage{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:6px;font-size:12px}
 code{background:#f3f2f1;padding:1px 5px;border-radius:2px}

@@ -174,7 +174,8 @@ function renderGrid(header, rows, note) {
     r.forEach(c => { const td = document.createElement("td"); td.textContent = c ?? ""; td.title = c ?? ""; tr.appendChild(td); });
     t.appendChild(tr);
   });
-  $("resultInfo").textContent = `${rows.length} rows (preview of first 200). ` + (note || "");
+  $("resultInfo").textContent = `${header.length} columns x ${rows.length} rows (preview of first 200). ` + (note || "");
+  log(`Preview: ${header.length} columns, ${rows.length} rows shown.`);
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
