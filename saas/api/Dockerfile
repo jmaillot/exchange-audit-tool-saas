@@ -1,7 +1,7 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY saas/api/ saas/api/
-WORKDIR /src/saas/api
+# Build context is saas/api (see build: ./api in docker-compose files).
+COPY . .
 RUN dotnet publish -c Release -o /app
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
