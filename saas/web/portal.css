@@ -42,13 +42,14 @@ input[type=text],input:not([type]),input[type=search],input[type=password]{width
 .badge{background:#e1dfdd;border-radius:10px;padding:3px 10px;font-size:12px}
 .badge.warn{background:var(--warn-bg);color:var(--warn);border:1px solid #c19c00}
 .hidden{display:none!important}
-.columns{display:grid;grid-template-columns:minmax(340px,450px) 1fr;gap:12px;align-items:start}
+.columns{display:grid;grid-template-columns:minmax(380px,540px) 1fr;gap:12px;align-items:start}
 @media(max-width:1100px){.columns{grid-template-columns:1fr}}
 .grp{margin-bottom:10px}
 .grp h3{font-size:13px;margin:0 0 6px}
 .grp .hint{font-size:12px;color:var(--muted);margin-bottom:6px}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
-.opt{display:flex;gap:6px;align-items:center;font-size:13px;padding:3px 0}
+.opt{display:flex;gap:6px;align-items:flex-start;font-size:13px;padding:3px 0;min-width:0;overflow-wrap:anywhere}
+.opt input{flex-shrink:0;margin-top:2px}
 .opt.dim{color:var(--muted)}
 .opt .slow{font-size:11px;color:var(--warn)}
 .grid-wrap{overflow:auto;max-height:520px;border:1px solid var(--border)}

@@ -64,7 +64,6 @@ function openSection(id) {
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
-  $("scopeBadge").textContent = s.scope === "Both" ? "Exchange Online + on-prem (Online defaults)" : "Exchange Online only";
   $("outFile").value = s.defaultFileName;
   $("filter").value = "";
   renderGroups("");
