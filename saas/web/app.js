@@ -47,7 +47,10 @@ function renderNav() {
     const t = document.createElement("button");
     t.className = "nav-cat";
     t.innerHTML = `<span class="caret"></span>`;
-    t.appendChild(document.createTextNode(cat));
+    t.appendChild(document.createTextNode(cat + " "));
+    const n = document.createElement("span");
+    n.className = "nav-count"; n.textContent = cats[cat].length;
+    t.appendChild(n);
     const wrap = document.createElement("div");
     wrap.className = "nav-items";
     cats[cat].forEach(s => {
@@ -71,6 +74,7 @@ function renderCoverage() {
 function showView(v) {
   ["home", "section", "activity"].forEach(x => $("view-" + x).classList.toggle("hidden", x !== v));
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === v));
+  if (v !== "section") document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.remove("active"));
 }
 
 function openSection(id) {
@@ -78,6 +82,7 @@ function openSection(id) {
   const s = state.sections.find(x => x.id === id); if (!s) return;
   state.current = s; state.checks = {};
   showView("section");
+  document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === id));
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
