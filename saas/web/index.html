@@ -32,19 +32,28 @@
       <h1>Exchange Audit</h1>
       <div class="card">
         <h2>Connect with Microsoft</h2>
-        <p class="muted">Single multi-tenant Entra app. Sign in with an Exchange reader account (e.g. View-Only Organization Management). The access token lives in memory only and is dropped on disconnect.</p>
+        <p class="muted">Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). The access token is kept in memory only and dropped on disconnect.</p>
+        <label>Work email (UPN)
+          <input id="upn" placeholder="you@contoso.onmicrosoft.com" autocomplete="username">
+        </label>
         <label>Tenant organization
           <input id="org" placeholder="contoso.onmicrosoft.com" autocomplete="off">
         </label>
-        <label>Access token (EXO, audience https://outlook.office365.com)
-          <input id="token" type="password" placeholder="Paste Bearer token from your login flow" autocomplete="off">
-        </label>
         <div class="row">
-          <button id="connectBtn" class="btn-primary">Connect</button>
+          <button id="connectBtn" class="btn-primary">Connect with Microsoft</button>
           <button id="disconnectBtn" class="btn">Disconnect &amp; drop token</button>
           <span id="homeStatus" class="muted"></span>
         </div>
-        <p class="muted small">Admin consent (once per tenant): <code>https://login.microsoftonline.com/organizations/adminconsent?client_id=&lt;YOUR-APP-ID&gt;</code>. See <code>saas/README.md</code> for the one-time app setup.</p>
+        <div class="row">
+          <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant (admin, one-time)</a>
+        </div>
+        <details id="manualBox">
+          <summary>Advanced: paste an access token manually</summary>
+          <label>Access token (EXO, audience https://outlook.office365.com)
+            <input id="token" type="password" placeholder="Paste Bearer token" autocomplete="off">
+          </label>
+          <div class="row"><button id="manualBtn" class="btn">Use this token</button></div>
+        </details>
       </div>
       <div class="card">
         <h2>Coverage (Exchange Online, 25 sections)</h2>
@@ -95,6 +104,7 @@
     </div>
   </main>
 </div>
+<script src="config.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

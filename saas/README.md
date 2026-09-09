@@ -19,12 +19,11 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 
 ## 1. One-time multi-tenant app registration (you, the publisher)
 
-1. Entra admin center → App registrations → New: name `Exchange Audit SaaS`, supported account types **Accounts in any organizational directory (multitenant)**, redirect URI `https://<your-web>/signin-oidc`.
-2. API permissions → Add **Exchange** delegated `ManageAsUser` (run EXO PowerShell as the signed-in reader) + **Microsoft Graph** delegated `User.Read`. No application permissions, no cert needed for delegated flow.
-3. Expose no scopes. Note the **Application (client) ID**.
-4. Customers consent once per tenant (admin): `https://login.microsoftonline.com/organizations/adminconsent?client_id=<YOUR-APP-ID>`.
-5. Auditors need an Exchange read role (e.g. **View-Only Organization Management**). Delegated calls inherit their RBAC — no `New-ServicePrincipal` step.
-6. Token acquisition is outside this compose stack (your identity layer / `az account get-access-token --resource https://outlook.office365.com`). Paste the token + tenant org into the web Home page. Optional later: add a cert to the same app for app-only scheduled runs (`Exchange.ManageAsApp` + role assignment).
+1. Entra admin center → App registrations → New: name `Exchange Audit SaaS`, supported account types **Accounts in any organizational directory (multitenant)**.
+2. API permissions → Add **Exchange** delegated permission for PowerShell-as-user (run EXO as the signed-in reader) + **Microsoft Graph** delegated `User.Read`. No application permissions, no cert needed for delegated flow.
+3. Authentication → Add platform **Single-page application**, redirect URI `https://<your-web>/`, enable **Allow public client flows**. The web app signs users in directly (MSAL + PKCE, no secret).
+4. Deploy config: set `clientId` in `saas/web/config.js`, and place the `msal-browser.min.js` UMD build from the MSAL.js releases next to `index.html` (or point `msalSrc` at your hosted copy).
+5. Auditors sign in with an Exchange read role (e.g. **View-Only Organization Management**). Delegated calls inherit their RBAC — no `New-ServicePrincipal` step. First user in a tenant clicks **Register this tenant** in the web UI (admin, one click, pre-filled from the UPN domain); afterwards everyone just signs in.
 
 ## 2. Docker Compose setup
 
@@ -45,7 +44,7 @@ Real Exchange run: set `EAT_DEMO_MODE=false`, restart worker. The worker image p
 
 ## 3. Usage
 
-1. Open the web app → Home → enter **Tenant organization** (`contoso.onmicrosoft.com`) + **Access token** → Connect. Token stays in browser memory; Disconnect drops it. API/worker never persist it.
+1. Open the web app → Home → enter your **work email (UPN)** → **Connect with Microsoft** and sign in. Tenant org is pre-filled from your email domain (editable). Token stays in browser memory (MSAL memory cache); Disconnect drops it. No token copy-paste — the **Advanced** section keeps manual paste as fallback.
 2. Pick a section in the left nav (grouped by category, e.g. Mailboxes, Groups, Protection). Each section offers property groups with Online defaults, `Filter`, `Select all` and an amber `Slow options` warning.
 3. Set output filename, keep `XLSX` checked if wanted, press **RUN AUDIT**. Poll `GET /api/jobs/{id}` every 3s; preview shows the first 200 rows.
 4. **Download CSV / XLSX**. CSV is `;`-delimited UTF-8 (multi-values `,`-joined); XLSX has bold header, filter, frozen top row.

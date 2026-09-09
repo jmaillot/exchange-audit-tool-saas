@@ -1,6 +1,7 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, token: "", org: "", jobId: null, poll: null };
+const state = { sections: [], current: null, checks: {}, token: "", tokenExp: 0, org: "", upn: "", jobId: null, poll: null, msal: null, msalAccount: null };
+const EAT_CFG = window.EAT_CONFIG || {};
 const $ = id => document.getElementById(id);
 const logEl = () => $("activityLog");
 
@@ -122,6 +123,7 @@ function resetResults() {
 
 async function runAudit() {
   if (!state.token || !state.org) { alert("Connect first (token + tenant organization)."); showView("home"); return; }
+  try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expired, please reconnect."; log("Token refresh failed: " + (e.message || e)); return; }
   const body = { sectionId: state.current.id, selection: selection(), organization: state.org, includeXlsx: $("xlsx").checked };
   log(`RUN ${body.sectionId} selection=${JSON.stringify(body.selection)}`);
   $("runBtn").disabled = true; $("cancelBtn").disabled = false;
@@ -178,17 +180,105 @@ $("runBtn").onclick = runAudit;
 $("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log("Polling stopped (worker job continues to timeout)."); };
 $("crumbHome").onclick = e => { e.preventDefault(); showView("home"); };
 $("hamburger").onclick = () => $("sidenav").classList.toggle("hidden");
-$("connectBtn").onclick = () => {
-  state.token = $("token").value.trim(); state.org = $("org").value.trim();
-  if (!state.token || !state.org) { $("homeStatus").textContent = "Enter both fields."; return; }
-  $("connDot").classList.add("on"); $("connText").textContent = "Connected: " + state.org;
+function setConnected(label) {
+  $("connDot").classList.add("on"); $("connText").textContent = "Connected: " + label;
   $("homeStatus").textContent = "Connected (token in memory only).";
-  log("Connected to tenant " + state.org + ". Token held in memory.");
+}
+function setDisconnected(msg) {
+  state.token = ""; state.tokenExp = 0; state.msalAccount = null; state.jobId = null; pollStop();
+  $("connDot").classList.remove("on"); $("connText").textContent = "Not connected";
+  $("homeStatus").textContent = msg || "Disconnected, token dropped.";
+}
+function upnDomain(upn) {
+  const i = (upn || "").lastIndexOf("@");
+  return i > 0 ? upn.slice(i + 1).trim().toLowerCase() : "";
+}
+function updateRegisterLink() {
+  const d = upnDomain($("upn").value) || $("org").value.trim();
+  const a = $("registerLink");
+  if (d && EAT_CFG.clientId && EAT_CFG.clientId.indexOf("PASTE") !== 0) {
+    a.href = "https://login.microsoftonline.com/" + encodeURIComponent(d) +
+      "/adminconsent?client_id=" + encodeURIComponent(EAT_CFG.clientId);
+    a.style.display = "";
+  } else a.style.display = "none";
+}
+function loadScript(src) {
+  return new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = () => res(true);
+    s.onerror = () => rej(new Error("load " + src));
+    document.head.appendChild(s);
+  });
+}
+$("upn").oninput = () => {
+  const d = upnDomain($("upn").value);
+  if (d && !$("org").value) $("org").value = d;
+  updateRegisterLink();
+};
+$("org").oninput = updateRegisterLink;
+$("connectBtn").onclick = async () => {
+  const upn = $("upn").value.trim();
+  const domain = upnDomain(upn);
+  if (!upn || !domain) { $("homeStatus").textContent = "Enter your work email (UPN)."; return; }
+  if (!EAT_CFG.clientId || EAT_CFG.clientId.indexOf("PASTE") === 0) {
+    $("homeStatus").textContent = "Server not configured: set clientId in web/config.js.";
+    return;
+  }
+  if (!window.msal) {
+    try { await loadScript(EAT_CFG.msalSrc || "./msal-browser.min.js"); }
+    catch (e) { log("MSAL library not found: " + e.message); }
+  }
+  if (!window.msal) {
+    $("homeStatus").textContent = "Microsoft login library missing — use Advanced token paste below.";
+    $("manualBox").open = true;
+    return;
+  }
+  try {
+    $("homeStatus").textContent = "Opening Microsoft sign-in...";
+    // Tokens cached in memory only (never localStorage/sessionStorage).
+    const app = new window.msal.PublicClientApplication({
+      auth: { clientId: EAT_CFG.clientId, authority: "https://login.microsoftonline.com/" + domain },
+      cache: { cacheLocation: "memory" }
+    });
+    const scopes = EAT_CFG.exoScopes || ["https://outlook.office365.com/.default"];
+    const login = await app.loginPopup({ scopes, loginHint: upn });
+    app.setActiveAccount(login.account);
+    state.msal = app; state.msalAccount = login.account;
+    state.token = login.accessToken;
+    state.tokenExp = (login.expiresOn ? login.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
+    state.upn = login.account.username || upn;
+    state.org = $("org").value.trim() || domain;
+    $("org").value = state.org;
+    setConnected(state.org + " (" + state.upn + ")");
+    log("Signed in as " + state.upn + " (tenant " + state.org + "). Token held in memory.");
+  } catch (e) {
+    $("homeStatus").textContent = "Sign-in failed: " + (e.message || e);
+    log("Sign-in error: " + (e.message || e));
+  }
+};
+async function ensureToken() {
+  if (state.msal && state.msalAccount && Date.now() > state.tokenExp - 5 * 60 * 1000) {
+    const tok = await state.msal.acquireTokenSilent({
+      scopes: EAT_CFG.exoScopes || ["https://outlook.office365.com/.default"],
+      account: state.msalAccount
+    });
+    state.token = tok.accessToken;
+    state.tokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
+    log("Token refreshed silently.");
+  }
+}
+$("manualBtn").onclick = () => {
+  state.msal = null; state.msalAccount = null;
+  state.token = $("token").value.trim(); state.org = $("org").value.trim();
+  if (!state.token || !state.org) { $("homeStatus").textContent = "Enter token and tenant organization."; return; }
+  state.tokenExp = Date.now() + 50 * 60 * 1000;
+  setConnected(state.org);
+  log("Connected to tenant " + state.org + " (manual token). Token held in memory.");
 };
 $("disconnectBtn").onclick = () => {
-  state.token = ""; $("token").value = ""; state.jobId = null; pollStop();
-  $("connDot").classList.remove("on"); $("connText").textContent = "Not connected";
-  $("homeStatus").textContent = "Disconnected, token dropped.";
+  if ($("token")) $("token").value = "";
+  state.msal = null;
+  setDisconnected();
   log("Disconnected, token dropped.");
 };
 $("dlCsv").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=csv", "_blank");
@@ -196,3 +286,4 @@ $("dlXlsx").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/dow
 document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 
 loadSections().catch(e => { log("API unreachable: " + e.message); $("coverage").textContent = "API unreachable."; });
+updateRegisterLink();
