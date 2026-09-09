@@ -27,6 +27,24 @@ string Redact(string s)
 
 app.MapGet("/api/health", () => Results.Json(new { ok = true, sections = onlineSections.Count }));
 
+// Public web config (no secrets): clientId + login library sources + scopes,
+// read from environment so the NAS admin only edits saas/.env.
+app.MapGet("/api/config", () =>
+{
+    string scopes = Environment.GetEnvironmentVariable("EAT_EXO_SCOPES") ?? "https://outlook.office365.com/.default";
+    var sources = new List<string>();
+    string envSrc = Environment.GetEnvironmentVariable("EAT_MSAL_SRC") ?? "";
+    if (!string.IsNullOrWhiteSpace(envSrc)) sources.Add(envSrc.Trim());
+    sources.Add("./msal-browser.min.js"); // optional vendored copy next to index.html
+    sources.Add("https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"); // Microsoft CDN
+    return Results.Json(new
+    {
+        clientId = (Environment.GetEnvironmentVariable("EAT_CLIENT_ID") ?? "").Trim(),
+        msalSources = sources,
+        exoScopes = scopes.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+    });
+});
+
 // Section catalog: drives the web checkboxes. Mirrors the AuditOptionGroup model.
 app.MapGet("/api/sections", () =>
 {

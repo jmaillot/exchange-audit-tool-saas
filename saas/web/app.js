@@ -1,7 +1,16 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
 const state = { sections: [], current: null, checks: {}, token: "", tokenExp: 0, org: "", upn: "", jobId: null, poll: null, msal: null, msalAccount: null };
-const EAT_CFG = window.EAT_CONFIG || {};
+// Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
+const EAT_CFG = Object.assign(
+  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"] },
+  window.EAT_CONFIG || {});
+fetch("api/config").then(r => r.json()).then(c => {
+  if (c.clientId) EAT_CFG.clientId = c.clientId;
+  if (c.msalSources && c.msalSources.length) EAT_CFG.msalSources = c.msalSources;
+  if (c.exoScopes && c.exoScopes.length) EAT_CFG.exoScopes = c.exoScopes;
+  updateRegisterLink();
+}).catch(() => {});
 const $ = id => document.getElementById(id);
 const logEl = () => $("activityLog");
 
@@ -225,8 +234,10 @@ $("connectBtn").onclick = async () => {
     return;
   }
   if (!window.msal) {
-    try { await loadScript(EAT_CFG.msalSrc || "./msal-browser.min.js"); }
-    catch (e) { log("MSAL library not found: " + e.message); }
+    for (const src of (EAT_CFG.msalSources || ["./msal-browser.min.js"])) {
+      try { await loadScript(src); if (window.msal) break; }
+      catch (e) { log("MSAL load failed: " + src); }
+    }
   }
   if (!window.msal) {
     $("homeStatus").textContent = "Microsoft login library missing — use Advanced token paste below.";

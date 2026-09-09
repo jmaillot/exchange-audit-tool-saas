@@ -19,10 +19,10 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 
 ## 1. One-time multi-tenant app registration (you, the publisher)
 
-1. Entra admin center → App registrations → New: name `Exchange Audit SaaS`, supported account types **Accounts in any organizational directory (multitenant)**.
-2. API permissions → Add **Exchange** delegated permission for PowerShell-as-user (run EXO as the signed-in reader) + **Microsoft Graph** delegated `User.Read`. No application permissions, no cert needed for delegated flow.
-3. Authentication → Add platform **Single-page application**, redirect URI `https://<your-web>/`, enable **Allow public client flows**. The web app signs users in directly (MSAL + PKCE, no secret).
-4. Deploy config: set `clientId` in `saas/web/config.js`, and place the `msal-browser.min.js` UMD build from the MSAL.js releases next to `index.html` (or point `msalSrc` at your hosted copy).
+1. Entra admin center (`entra.microsoft.com`) → **Identity** → **Applications** → **App registrations** → **New registration**: name `Exchange Audit SaaS`, supported account types **Accounts in any organizational directory (multitenant)**. Note the **Application (client) ID** → put it in `saas/.env` as `EAT_CLIENT_ID=`.
+2. API permissions (exact clicks) — still on your app page, left menu **Manage → API permissions** → **Add a permission** → tab **APIs my organization uses** → search `Office 365 Exchange Online` → select it → **Delegated permissions** → tick **`Exchange.Manage`** → **Add permissions**. Then **Add a permission** → **Microsoft Graph** → **Delegated permissions** → `User.Read` is already there by default. Finish with **Grant admin consent for [your org]** (green checkmarks). No application permissions, no cert needed for delegated flow.
+3. Authentication — left menu **Manage → Authentication** → **Add a platform** → **Single-page application**, redirect URI `https://<your-web>/`, **Save**; then tick **Allow public client flows** → **Save**. The web app signs users in directly (MSAL + PKCE, no secret).
+4. Login library — nothing to do if the server has internet: the web app loads Microsoft's login library from their CDN automatically. Only for offline/air-gapped servers: download `msal-browser.min.js` (UMD build, MSAL.js releases) into `saas/web/` and rebuild `web`.
 5. Auditors sign in with an Exchange read role (e.g. **View-Only Organization Management**). Delegated calls inherit their RBAC — no `New-ServicePrincipal` step. First user in a tenant clicks **Register this tenant** in the web UI (admin, one click, pre-filled from the UPN domain); afterwards everyone just signs in.
 
 ## 2. Docker Compose setup
