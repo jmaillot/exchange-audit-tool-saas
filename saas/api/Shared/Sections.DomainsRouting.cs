@@ -51,18 +51,11 @@ namespace ExchangeAuditTool
                 "transport-rules",
                 "Transport rules",
                 "Transport rule export",
-                "Audit mail flow rules (Get-TransportRule). Auto-detect keeps only populated named properties.",
+                "Audit mail flow rules (Get-TransportRule).",
                 "rule",
                 AuditScope.Both);
             section.Category = "Domains / Routing";
             section.DefaultFileName = "TransportRules.csv";
-
-            // Auto mode: scan all rules and keep only the named properties that are actually
-            // populated on at least one rule (most of the ~150 rule properties are empty).
-            var auto = new AuditOptionGroup("auto", "Smart mode", GroupMode.MultiCheck); auto.Columns = 1;
-            auto.Hint = "Auto-detect keeps only columns that have a value on at least one rule (ignores the manual groups below).";
-            auto.Add(new AuditOption("autodetect", "Auto-detect populated properties only (recommended)", "autodetect", true));
-            section.AddGroup(auto);
 
             var identity = new AuditOptionGroup("identity", "Identity & metadata", GroupMode.MultiCheck); identity.Columns = 2;
             identity.AddProp("Name", true);
@@ -148,8 +141,6 @@ namespace ExchangeAuditTool
 
             section.BuildScript = delegate (AuditSelection sel, ScriptContext ctx)
             {
-                bool autoDetect = sel.IsSelected("auto", "autodetect");
-
                 var sb = new StringBuilder();
                 sb.AppendLine("Write-Host 'Querying transport rules...'");
                 sb.AppendLine("$items = @(Get-TransportRule -ErrorAction SilentlyContinue)");
@@ -165,53 +156,18 @@ namespace ExchangeAuditTool
                 sb.AppendLine("}");
                 sb.AppendLine();
 
-                if (autoDetect)
-                {
-                    // Candidate named properties (excludes the raw .NET Conditions/Exceptions/Actions objects).
-                    var candidates = new List<string>();
-                    candidates.AddRange(new string[] { "Name", "State", "Priority", "Mode", "Comments", "CreatedBy", "LastModifiedBy", "WhenChanged", "ActivationDate", "ExpiryDate" });
-                    foreach (string k in new string[] { "conditions", "exceptions", "actions" })
-                        foreach (AuditOption o in FindGroup(section, k).Options)
-                            candidates.Add(o.Value);
-
-                    var arr = new StringBuilder();
-                    foreach (string c in candidates) { if (arr.Length > 0) arr.Append(","); arr.Append("'" + c + "'"); }
-                    sb.AppendLine("$candidates = @(" + arr.ToString() + ")");
-                    // Columns always kept even if empty (identity/order/description).
-                    sb.AppendLine("$always = @('Name','State','Priority','Mode')");
-                    sb.AppendLine("$populated = New-Object System.Collections.Generic.List[string]");
-                    sb.AppendLine("foreach ($p in $candidates) {");
-                    sb.AppendLine("    if ($always -contains $p) { $populated.Add($p); continue }");
-                    sb.AppendLine("    $has = $false");
-                    sb.AppendLine("    foreach ($r in $items) {");
-                    sb.AppendLine("        $v = $r.$p");
-                    sb.AppendLine("        if ($v -is [bool]) { if ($v) { $has=$true; break } }");
-                    sb.AppendLine("        elseif ($v -is [string]) { if ($v.Trim().Length -gt 0) { $has=$true; break } }");
-                    sb.AppendLine("        elseif ($null -ne $v -and $v.PSObject.Properties['Count']) { if ($v.Count -gt 0) { $has=$true; break } }");
-                    sb.AppendLine("        elseif ($null -ne $v) { if (([string]$v).Trim().Length -gt 0) { $has=$true; break } }");
-                    sb.AppendLine("    }");
-                    sb.AppendLine("    if ($has) { $populated.Add($p) }");
-                    sb.AppendLine("}");
-                    sb.AppendLine("Write-Host ('Populated columns: ' + ($populated -join ','))");
-                    sb.AppendLine("$rows = foreach ($r in $items) {");
-                    sb.AppendLine("    $o = New-Object psobject");
-                    sb.AppendLine("    foreach ($c in $populated) { $o | Add-Member -NotePropertyName $c -NotePropertyValue (Format-TR $r.$c) -Force }");
-                    sb.AppendLine("    $o");
-                    sb.AppendLine("}");
-                }
-                else
-                {
-                    var chosen = Collect(sel, "identity", "conditions", "exceptions", "actions");
-                    if (chosen.Count == 0) chosen.Add("Name");
-                    var arr = new StringBuilder();
-                    foreach (string c in chosen) { if (arr.Length > 0) arr.Append(","); arr.Append("'" + c + "'"); }
-                    sb.AppendLine("$cols = @(" + arr.ToString() + ")");
-                    sb.AppendLine("$rows = foreach ($r in $items) {");
-                    sb.AppendLine("    $o = New-Object psobject");
-                    sb.AppendLine("    foreach ($c in $cols) { $o | Add-Member -NotePropertyName $c -NotePropertyValue (Format-TR $r.$c) -Force }");
-                    sb.AppendLine("    $o");
-                    sb.AppendLine("}");
-                }
+                // Manual column selection only. Empty-column pruning is applied
+                // uniformly to every section by the API smart mode (CSV post-pass).
+                var chosen = Collect(sel, "identity", "conditions", "exceptions", "actions");
+                if (chosen.Count == 0) chosen.Add("Name");
+                var arr = new StringBuilder();
+                foreach (string c in chosen) { if (arr.Length > 0) arr.Append(","); arr.Append("'" + c + "'"); }
+                sb.AppendLine("$cols = @(" + arr.ToString() + ")");
+                sb.AppendLine("$rows = foreach ($r in $items) {");
+                sb.AppendLine("    $o = New-Object psobject");
+                sb.AppendLine("    foreach ($c in $cols) { $o | Add-Member -NotePropertyName $c -NotePropertyValue (Format-TR $r.$c) -Force }");
+                sb.AppendLine("    $o");
+                sb.AppendLine("}");
 
                 sb.AppendLine();
                 sb.Append(ctx.ExportCsv("$rows"));
@@ -220,13 +176,6 @@ namespace ExchangeAuditTool
             };
 
             return section;
-        }
-
-        // Finds a group by key within a section (used to enumerate candidate property names).
-        private static AuditOptionGroup FindGroup(AuditSection section, string key)
-        {
-            foreach (AuditOptionGroup g in section.Groups) if (g.Key == key) return g;
-            return new AuditOptionGroup(key, key, GroupMode.MultiCheck);
         }
 
         // ============================================================ 2. ACCEPTED DOMAINS
