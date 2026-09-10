@@ -7,7 +7,7 @@ const I18N = {
 en: {
   searchSections: "Search audit sections", menuAria: "Menu", accountAria: "Account", navAria: "Navigation",
   navConnection: "Connection", navMonitor: "Monitor", navActivity: "Activity log",
-  groupConnection: "Connection", groupMonitor: "Monitor",
+  groupSys: "Connection & Monitor",
   crumbConnectionHome: "Connection &gt; Exchange Audit",
   noticeHtml: `<strong>First time here?</strong> Enter your work email below, then click <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a> (admin, once per tenant) before connecting.`,
   connectTitle: "Connect with Microsoft",
@@ -50,7 +50,7 @@ en: {
 fr: {
   searchSections: "Rechercher des sections", menuAria: "Menu", accountAria: "Compte", navAria: "Navigation",
   navConnection: "Connexion", navMonitor: "Supervision", navActivity: "Journal d'activité",
-  groupConnection: "Connexion", groupMonitor: "Supervision",
+  groupSys: "Connexion & Supervision",
   crumbConnectionHome: "Connexion &gt; Exchange Audit",
   noticeHtml: `<strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a> (admin, une seule fois par tenant) avant de vous connecter.`,
   connectTitle: "Se connecter avec Microsoft",
@@ -166,9 +166,11 @@ function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
   const cats = {};
   state.sections.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
-  const groups = [{ cat: t("groupConnection"), items: [{ id: "__home", title: t("navConnection"), view: "home" }] }];
+  const groups = [{ cat: t("groupSys"), items: [
+    { id: "__home", title: t("navConnection"), view: "home" },
+    { id: "__activity", title: t("navActivity"), view: "activity" }
+  ] }];
   Object.keys(cats).sort().forEach(cat => groups.push({ cat, items: cats[cat].map(s => ({ id: s.id, title: s.navTitle })) }));
-  groups.push({ cat: t("groupMonitor"), items: [{ id: "__activity", title: t("navActivity"), view: "activity" }] });
   groups.forEach(g => {
     const block = document.createElement("div");
     block.className = "nav-block"; block.dataset.cat = g.cat;
@@ -204,8 +206,8 @@ function renderCoverage() {
 
 function showView(v) {
   ["home", "section", "activity"].forEach(x => $("view-" + x).classList.toggle("hidden", x !== v));
-  if (v === "home") markNav("__home", t("groupConnection"));
-  else if (v === "activity") markNav("__activity", t("groupMonitor"));
+  if (v === "home") markNav("__home", t("groupSys"));
+  else if (v === "activity") markNav("__activity", t("groupSys"));
 }
 
 function openSection(id) {
