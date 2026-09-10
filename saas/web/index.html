@@ -10,73 +10,73 @@
 <header class="topbar">
   <button class="icon-btn" id="hamburger" aria-label="Menu">&#9776;</button>
   <span class="brand">Exchange Online Audit Tool</span>
-  <div class="topsearch"><input id="topSearch" type="search" placeholder="Search audit sections" aria-label="Search audit sections"></div>
+  <div class="topsearch"><input id="topSearch" type="search" placeholder="Rechercher des sections" aria-label="Rechercher des sections"></div>
   <div class="topright">
-    <span id="connDot" class="dot" title="Not connected"></span>
-    <span id="connText">Not connected</span>
+    <span id="connDot" class="dot" title="Non connecté"></span>
+    <span id="connText">Non connecté</span>
     <button class="icon-btn" aria-label="Account">&#9679;</button>
   </div>
 </header>
 <div class="shell">
   <nav class="sidenav" id="sidenav" aria-label="Navigation">
-    <button class="nav-item active" data-view="home">Connection</button>
+    <button class="nav-item active" data-view="home">Connexion</button>
     <div id="navGroups"></div>
-    <div class="nav-section">Monitor</div>
-    <button class="nav-item" data-view="activity">Activity log</button>
+    <div class="nav-section">Supervision</div>
+    <button class="nav-item" data-view="activity">Journal d'activité</button>
   </nav>
   <main class="content">
     <div id="view-home" class="view">
-      <div class="breadcrumb">Connection &gt; Exchange Audit</div>
+      <div class="breadcrumb">Connexion &gt; Exchange Audit</div>
       <h1>Exchange Audit</h1>
       <div class="notice">
-        <strong>First time here?</strong> Enter your work email below, then click
-        <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a>
-        (admin, once per tenant) before connecting.
+        <strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez
+        <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a>
+        (admin, une seule fois par tenant) avant de vous connecter.
       </div>
       <div class="card">
-        <h2>Connect with Microsoft</h2>
-        <p class="muted">Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). The access token is kept in memory only and dropped on disconnect.</p>
-        <label>Work email (UPN)
-          <input id="upn" placeholder="you@contoso.onmicrosoft.com" autocomplete="username">
+        <h2>Se connecter avec Microsoft</h2>
+        <p class="muted">Saisissez votre e-mail professionnel (UPN) et connectez-vous chez Microsoft avec un compte lecteur Exchange (ex. View-Only Organization Management). Le jeton d'accès est conservé en mémoire uniquement et supprimé à la déconnexion.</p>
+        <label>E-mail professionnel (UPN)
+          <input id="upn" placeholder="vous@contoso.onmicrosoft.com" autocomplete="username">
         </label>
-        <label>Tenant organization
+        <label>Organisation du tenant
           <input id="org" placeholder="contoso.onmicrosoft.com" autocomplete="off">
         </label>
         <div class="row">
-          <button id="connectBtn" class="btn-primary">Connect with Microsoft</button>
-          <button id="disconnectBtn" class="btn">Disconnect &amp; drop token</button>
+          <button id="connectBtn" class="btn-primary">Se connecter avec Microsoft</button>
+          <button id="disconnectBtn" class="btn">Se déconnecter</button>
           <span id="homeStatus" class="muted"></span>
         </div>
       </div>
       <div class="card">
-        <h2>Coverage (Exchange Online, 25 sections)</h2>
+        <h2 id="coverageTitle">Couverture (Exchange Online)</h2>
         <div id="coverage" class="coverage"></div>
       </div>
     </div>
     <div id="view-section" class="view hidden">
-      <div class="breadcrumb"><a href="#" id="crumbHome">Connection</a> &gt; <span id="crumbSection"></span></div>
+      <div class="breadcrumb"><a href="#" id="crumbHome">Connexion</a> &gt; <span id="crumbSection"></span></div>
       <h1 id="secTitle"></h1>
       <p class="muted" id="secSub"></p>
       <div class="toolbar">
-        <span id="slowBadge" class="badge warn hidden">Slow options selected - this run may take longer</span>
+        <span id="slowBadge" class="badge warn hidden">Options lentes sélectionnées — l'exécution sera bien plus longue</span>
         <span class="spacer"></span>
-        <input id="filter" type="search" placeholder="Filter options" aria-label="Filter options">
-        <button id="selectAll" class="btn">Select all</button>
-        <button id="dlCsv" class="btn" disabled>Download CSV</button>
-        <button id="dlXlsx" class="btn" disabled>Download XLSX</button>
+        <input id="filter" type="search" placeholder="Filtrer les options" aria-label="Filtrer les options">
+        <button id="selectAll" class="btn">Tout sélectionner</button>
+        <button id="dlCsv" class="btn" disabled>Télécharger CSV</button>
+        <button id="dlXlsx" class="btn" disabled>Télécharger XLSX</button>
       </div>
       <div class="columns">
         <div class="left">
           <div id="groups"></div>
           <div class="row">
-            <button id="runBtn" class="btn-primary">RUN AUDIT</button>
-            <button id="cancelBtn" class="btn" disabled>Cancel</button>
+            <button id="runBtn" class="btn-primary">LANCER L'AUDIT</button>
+            <button id="cancelBtn" class="btn" disabled>Annuler</button>
           </div>
         </div>
         <div class="right">
           <div class="card">
             <div class="row">
-              <h2>Results preview</h2>
+              <h2>Aperçu des résultats</h2>
             </div>
             <div id="resultInfo" class="muted">No results yet.</div>
             <div class="grid-wrap"><table id="grid" aria-label="Results"></table></div>
@@ -86,8 +86,8 @@
       </div>
     </div>
     <div id="view-activity" class="view hidden">
-      <div class="breadcrumb">Connection &gt; Activity log</div>
-      <h1>Activity log</h1>
+      <div class="breadcrumb">Connexion &gt; Journal d'activité</div>
+      <h1>Journal d'activité</h1>
       <div class="card"><pre id="activityLog" class="log"></pre></div>
     </div>
   </main>

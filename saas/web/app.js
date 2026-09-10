@@ -28,7 +28,7 @@ async function loadSections() {
   if (!r.ok) throw new Error("API " + r.status);
   state.sections = await r.json();
   renderNav(); renderCoverage();
-  log(`Loaded ${state.sections.length} Exchange Online sections from API.`);
+  log(`${state.sections.length} sections Exchange Online chargées depuis l'API.`);
 }
 
 function setCat(block, open) {
@@ -67,6 +67,7 @@ function renderNav() {
 }
 
 function renderCoverage() {
+  $("coverageTitle").textContent = `Couverture (Exchange Online, ${state.sections.length} sections)`;
   $("coverage").innerHTML = state.sections.map(s => `<div>${esc(s.navTitle)}</div>`).join("");
 }
 
@@ -94,7 +95,7 @@ function openSection(id) {
   updateSlow();
   if (resume) { if (!state.poll) pollStart(); else fetchJobStatus(); }
   else { pollStop(); resetResults(); state.jobSection = null; state.jobStart = 0; }
-  } catch (e) { log("Failed to open section: " + (e.message || e)); }
+  } catch (e) { log("Ouverture de la section impossible : " + (e.message || e)); }
 }
 
 function renderGroups(filter) {
@@ -104,10 +105,10 @@ function renderGroups(filter) {
   // already define their own (key "auto") keep it; the flag is read in runAudit.
   const nativeSmart = state.current.groups.some(g => g.key === "auto" || (g.title || "").toLowerCase().includes("smart"));
   if (!nativeSmart) {
-    const label = "Auto-detect populated properties only (recommended)";
-    if (!f || "smart mode".includes(f) || label.toLowerCase().includes(f)) {
+    const label = "Détection auto des propriétés remplies uniquement (recommandé)";
+    if (!f || "mode intelligent".includes(f) || label.toLowerCase().includes(f)) {
       const card = document.createElement("div"); card.className = "card grp";
-      card.innerHTML = `<h3>Smart mode</h3><div class="hint">Keeps only columns that have a value on at least one row.</div>`;
+      card.innerHTML = `<h3>Mode intelligent</h3><div class="hint">Ne garde que les colonnes ayant une valeur sur au moins une ligne.</div>`;
       const opts = document.createElement("div"); opts.className = "opts";
       const lbl = document.createElement("label"); lbl.className = "opt";
       const inp = document.createElement("input");
@@ -141,7 +142,7 @@ function renderGroups(filter) {
       };
       lbl.appendChild(inp);
       lbl.appendChild(document.createTextNode(o.label + " "));
-      if (o.slow || g.slow) { const em = document.createElement("span"); em.className = "slow"; em.textContent = "slow"; lbl.appendChild(em); }
+      if (o.slow || g.slow) { const em = document.createElement("span"); em.className = "slow"; em.textContent = "lent"; lbl.appendChild(em); }
       opts.appendChild(lbl);
     });
     card.appendChild(opts); host.appendChild(card);
@@ -161,7 +162,7 @@ function updateSelectAll() {
     return o && o.label.toLowerCase().includes(($("filter").value || "").toLowerCase()) && g.mode !== "SingleChoice";
   });
   const on = keys.filter(k => state.checks[k]).length;
-  $("selectAll").textContent = keys.length && on === keys.length ? "Deselect all" : `Select all (${on}/${keys.length})`;
+  $("selectAll").textContent = keys.length && on === keys.length ? "Tout désélectionner" : `Tout sélectionner (${on}/${keys.length})`;
 }
 function selection() {
   const sel = {};
@@ -171,29 +172,29 @@ function selection() {
   return sel;
 }
 function resetResults() {
-  $("grid").innerHTML = ""; $("resultInfo").textContent = "No results yet.";
+  $("grid").innerHTML = ""; $("resultInfo").textContent = "Aucun résultat pour l'instant.";
   $("jobLog").textContent = ""; $("jobLog").classList.add("hidden");
   $("dlCsv").disabled = $("dlXlsx").disabled = true;
 }
 
 async function runAudit() {
-  if (!state.token || !state.org) { alert("Connect first (token + tenant organization)."); showView("home"); return; }
-  try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expired, please reconnect."; log("Token refresh failed: " + (e.message || e)); return; }
+  if (!state.token || !state.org) { alert("Connectez-vous d'abord (page Connexion)."); showView("home"); return; }
+  try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expirée, reconnectez-vous."; log("Échec d'actualisation du jeton : " + (e.message || e)); return; }
   const sel = selection();
   const nativeAuto = state.current.groups.some(g => g.key === "auto");
   const smart = nativeAuto ? (sel.auto || []).includes("autodetect") : state.smartMode;
   const body = { sectionId: state.current.id, selection: sel, organization: state.org, includeXlsx: true, smartMode: smart };
   log(`RUN ${body.sectionId} selection=${JSON.stringify(body.selection)}`);
   $("runBtn").disabled = true; $("cancelBtn").disabled = false;
-  $("resultInfo").textContent = "Queued...";
+  $("resultInfo").textContent = "En file d'attente…";
   const r = await fetch(API + "/api/jobs", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
   const j = await r.json();
-  if (!r.ok) { $("resultInfo").textContent = "Error: " + (j.error || r.status); log("FAILED: " + JSON.stringify(j)); $("runBtn").disabled = false; $("cancelBtn").disabled = true; return; }
+  if (!r.ok) { $("resultInfo").textContent = "Erreur : " + (j.error || r.status); log("ÉCHEC : " + JSON.stringify(j)); $("runBtn").disabled = false; $("cancelBtn").disabled = true; return; }
   state.jobId = j.jobId;
   state.jobSection = state.current.id;
   state.jobStart = Date.now();
   persistJob();
-  log("Job " + j.jobId + " started.");
+  log("Job " + j.jobId + " démarré.");
   pollStart();
 }
 function persistJob() {
@@ -226,7 +227,7 @@ async function fetchJobStatus() {
   const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
   if (!r.ok) {
     pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
-    $("resultInfo").textContent = `Job ${state.jobId} no longer known by the API (restarted?).`;
+    $("resultInfo").textContent = `Job ${state.jobId} inconnu de l'API (redémarrée ?).`;
     state.jobId = null; state.jobSection = null;
     try { sessionStorage.removeItem("eat.lastJob"); } catch (e) {}
     return;
@@ -234,14 +235,14 @@ async function fetchJobStatus() {
   const j = await r.json();
   const elapsed = state.jobStart ? fmtElapsed(Date.now() - state.jobStart) : "--:--:--";
   const active = j.status === "running" || j.status === "queued";
-  const note = `${active ? "Running... " + elapsed : "Finished in " + elapsed} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
+  const note = `${active ? "En cours… " + elapsed : "Terminé en " + elapsed} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
   if (j.header) renderGrid(j.header, j.preview || [], note);
   else $("resultInfo").textContent = note;
   if (j.log) { $("jobLog").textContent = j.log.slice(-8000); $("jobLog").classList.remove("hidden"); }
   if (j.status === "succeeded" || j.status === "failed") {
     pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
     $("dlCsv").disabled = !j.hasCsv; $("dlXlsx").disabled = !j.hasXlsx;
-    log(`Job ${state.jobId} ${j.status} in ${elapsed}${j.header ? " (" + j.header.length + " columns)" : ""}.`);
+    log(`Job ${state.jobId} ${j.status} en ${elapsed}${j.header ? " (" + j.header.length + " colonnes)" : ""}.`);
   }
 }
 function pollStart() {
@@ -260,7 +261,7 @@ function renderGrid(header, rows, note) {
     r.forEach(c => { const td = document.createElement("td"); td.textContent = c ?? ""; td.title = c ?? ""; tr.appendChild(td); });
     t.appendChild(tr);
   });
-  $("resultInfo").textContent = `${header.length} columns x ${rows.length} rows (preview of first 200). ` + (note || "");
+  $("resultInfo").textContent = `${header.length} colonnes x ${rows.length} lignes (aperçu des 200 premières). ` + (note || "");
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -277,17 +278,17 @@ $("selectAll").onclick = () => {
 };
 $("filter").oninput = e => renderGroups(e.target.value);
 $("runBtn").onclick = runAudit;
-$("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log("Polling stopped (worker job continues to timeout)."); };
+$("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log("Suivi arrêté (le job continue côté serveur jusqu'au timeout)."); };
 $("crumbHome").onclick = e => { e.preventDefault(); showView("home"); };
 $("hamburger").onclick = () => $("sidenav").classList.toggle("hidden");
 function setConnected(label) {
-  $("connDot").classList.add("on"); $("connText").textContent = "Connected: " + label;
-  $("homeStatus").textContent = "Connected (token in memory only).";
+  $("connDot").classList.add("on"); $("connText").textContent = "Connecté : " + label;
+  $("homeStatus").textContent = "Connecté (jeton en mémoire uniquement).";
 }
 function setDisconnected(msg) {
   state.token = ""; state.tokenExp = 0; state.msalAccount = null; state.jobId = null; pollStop();
-  $("connDot").classList.remove("on"); $("connText").textContent = "Not connected";
-  $("homeStatus").textContent = msg || "Disconnected, token dropped.";
+  $("connDot").classList.remove("on"); $("connText").textContent = "Non connecté";
+  $("homeStatus").textContent = msg || "Déconnecté, jeton supprimé.";
 }
 function upnDomain(upn) {
   const i = (upn || "").lastIndexOf("@");
@@ -319,23 +320,23 @@ $("org").oninput = updateRegisterLink;
 $("connectBtn").onclick = async () => {
   const upn = $("upn").value.trim();
   const domain = upnDomain(upn);
-  if (!upn || !domain) { $("homeStatus").textContent = "Enter your work email (UPN)."; return; }
+  if (!upn || !domain) { $("homeStatus").textContent = "Saisissez votre e-mail professionnel (UPN)."; return; }
   if (!EAT_CFG.clientId || EAT_CFG.clientId.indexOf("PASTE") === 0) {
-    $("homeStatus").textContent = "Server not configured: set clientId in web/config.js.";
+    $("homeStatus").textContent = "Serveur non configuré : clientId manquant (voir .env EAT_CLIENT_ID).";
     return;
   }
   if (!window.msal) {
     for (const src of (EAT_CFG.msalSources || ["./msal-browser.min.js"])) {
       try { await loadScript(src); if (window.msal) break; }
-      catch (e) { log("MSAL load failed: " + src); }
+      catch (e) { log("Chargement MSAL impossible : " + src); }
     }
   }
   if (!window.msal) {
-    $("homeStatus").textContent = "Microsoft login unavailable — please contact your administrator.";
+    $("homeStatus").textContent = "Connexion Microsoft indisponible — contactez votre administrateur.";
     return;
   }
   try {
-    $("homeStatus").textContent = "Opening Microsoft sign-in...";
+    $("homeStatus").textContent = "Ouverture de la connexion Microsoft…";
     // Tokens cached in memory only (never localStorage/sessionStorage).
     const app = new window.msal.PublicClientApplication({
       auth: { clientId: EAT_CFG.clientId, authority: "https://login.microsoftonline.com/" + domain },
@@ -351,10 +352,10 @@ $("connectBtn").onclick = async () => {
     state.org = $("org").value.trim() || domain;
     $("org").value = state.org;
     setConnected(state.org + " (" + state.upn + ")");
-    log("Signed in as " + state.upn + " (tenant " + state.org + "). Token held in memory.");
+    log("Connecté en tant que " + state.upn + " (tenant " + state.org + "). Jeton en mémoire.");
   } catch (e) {
-    $("homeStatus").textContent = "Sign-in failed: " + (e.message || e);
-    log("Sign-in error: " + (e.message || e));
+    $("homeStatus").textContent = "Échec de connexion : " + (e.message || e);
+    log("Erreur de connexion : " + (e.message || e));
   }
 };
 async function ensureToken() {
@@ -365,13 +366,13 @@ async function ensureToken() {
     });
     state.token = tok.accessToken;
     state.tokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
-    log("Token refreshed silently.");
+    log("Jeton actualisé silencieusement.");
   }
 }
 $("disconnectBtn").onclick = () => {
   state.msal = null;
   setDisconnected();
-  log("Disconnected, token dropped.");
+  log("Déconnecté, jeton supprimé.");
 };
 $("dlCsv").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=csv", "_blank");
 $("dlXlsx").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=xlsx", "_blank");
@@ -399,5 +400,5 @@ $("topSearch").onkeydown = e => {
   }
 };
 
-loadSections().then(restoreJob).catch(e => { log("API unreachable: " + e.message); $("coverage").textContent = "API unreachable."; });
+loadSections().then(restoreJob).catch(e => { log("API injoignable : " + e.message); $("coverage").textContent = "API injoignable."; });
 updateRegisterLink();
