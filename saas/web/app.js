@@ -7,6 +7,7 @@ const I18N = {
 en: {
   searchSections: "Search audit sections", menuAria: "Menu", accountAria: "Account", navAria: "Navigation",
   navConnection: "Connection", navMonitor: "Monitor", navActivity: "Activity log",
+  groupConnection: "Connection", groupMonitor: "Monitor",
   crumbConnectionHome: "Connection &gt; Exchange Audit",
   noticeHtml: `<strong>First time here?</strong> Enter your work email below, then click <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a> (admin, once per tenant) before connecting.`,
   connectTitle: "Connect with Microsoft",
@@ -49,6 +50,7 @@ en: {
 fr: {
   searchSections: "Rechercher des sections", menuAria: "Menu", accountAria: "Compte", navAria: "Navigation",
   navConnection: "Connexion", navMonitor: "Supervision", navActivity: "Journal d'activité",
+  groupConnection: "Connexion", groupMonitor: "Supervision",
   crumbConnectionHome: "Connexion &gt; Exchange Audit",
   noticeHtml: `<strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a> (admin, une seule fois par tenant) avant de vous connecter.`,
   connectTitle: "Se connecter avec Microsoft",
@@ -116,8 +118,11 @@ function setLang(l) {
   lang = I18N[l] ? l : "en";
   try { localStorage.setItem("eat.lang", lang); } catch (e) {}
   applyI18n();
+  renderNav();
   renderCoverage();
-  if (state.current) { renderGroups($("filter").value); updateSlow(); }
+  const vis = ["home", "section", "activity"].find(x => !$("view-" + x).classList.contains("hidden"));
+  if (vis === "section" && state.current) { markNav(state.current.id, state.current.category); renderGroups($("filter").value); updateSlow(); }
+  else showView(vis || "home");
 }
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
@@ -145,7 +150,7 @@ async function loadSections() {
   const r = await fetch(API + "/api/sections");
   if (!r.ok) throw new Error("API " + r.status);
   state.sections = await r.json();
-  renderNav(); renderCoverage();
+  renderNav(); renderCoverage(); showView("home");
   log(t("sectionsLoadedLog", { n: state.sections.length }));
 }
 
@@ -153,32 +158,43 @@ function setCat(block, open) {
   block.querySelector(".nav-items").style.display = open ? "" : "none";
   block.querySelector(".nav-cat").setAttribute("aria-expanded", open ? "true" : "false");
 }
+function markNav(id, cat) {
+  document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === id));
+  document.querySelectorAll("#navGroups .nav-block").forEach(bl => bl.classList.toggle("open", !!cat && bl.dataset.cat === cat));
+}
 function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
   const cats = {};
   state.sections.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
-  Object.keys(cats).sort().forEach(cat => {
+  const groups = [{ cat: t("groupConnection"), items: [{ id: "__home", title: t("navConnection"), view: "home" }] }];
+  Object.keys(cats).sort().forEach(cat => groups.push({ cat, items: cats[cat].map(s => ({ id: s.id, title: s.navTitle })) }));
+  groups.push({ cat: t("groupMonitor"), items: [{ id: "__activity", title: t("navActivity"), view: "activity" }] });
+  groups.forEach(g => {
     const block = document.createElement("div");
-    block.className = "nav-block"; block.dataset.cat = cat;
-    const t = document.createElement("button");
-    t.className = "nav-cat";
-    t.appendChild(document.createTextNode(cat + " "));
+    block.className = "nav-block"; block.dataset.cat = g.cat;
+    const head = document.createElement("button");
+    head.className = "nav-cat";
+    head.appendChild(document.createTextNode(g.cat + " "));
     const n = document.createElement("span");
-    n.className = "nav-count"; n.textContent = cats[cat].length;
-    t.appendChild(n);
+    n.className = "nav-count"; n.textContent = g.items.length;
+    head.appendChild(n);
     const wrap = document.createElement("div");
     wrap.className = "nav-items";
-    cats[cat].forEach(s => {
+    g.items.forEach(it => {
       const b = document.createElement("button");
-      b.className = "nav-item"; b.textContent = s.navTitle; b.dataset.section = s.id;
-      b.onclick = () => openSection(s.id);
+      b.className = "nav-item"; b.textContent = it.title; b.dataset.section = it.id;
+      if (it.view) {
+        b.dataset.view = it.view;
+        b.onclick = () => showView(it.view);
+      } else {
+        b.onclick = () => openSection(it.id);
+      }
       wrap.appendChild(b);
     });
-    t.onclick = () => setCat(block, wrap.style.display === "none");
-    block.appendChild(t); block.appendChild(wrap); host.appendChild(block);
+    head.onclick = () => setCat(block, wrap.style.display === "none");
+    block.appendChild(head); block.appendChild(wrap); host.appendChild(block);
     setCat(block, false);
   });
-  document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 }
 
 function renderCoverage() {
@@ -188,11 +204,8 @@ function renderCoverage() {
 
 function showView(v) {
   ["home", "section", "activity"].forEach(x => $("view-" + x).classList.toggle("hidden", x !== v));
-  document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-  if (v !== "section") {
-    document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.remove("active"));
-    document.querySelectorAll("#navGroups .nav-block").forEach(b => b.classList.remove("open"));
-  }
+  if (v === "home") markNav("__home", t("groupConnection"));
+  else if (v === "activity") markNav("__activity", t("groupMonitor"));
 }
 
 function openSection(id) {
@@ -204,8 +217,7 @@ function openSection(id) {
   state.current = s;
   if (!resume) state.checks = {};
   showView("section");
-  document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === id));
-  document.querySelectorAll("#navGroups .nav-block").forEach(bl => bl.classList.toggle("open", bl.dataset.cat === s.category));
+  markNav(id, s.category);
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
