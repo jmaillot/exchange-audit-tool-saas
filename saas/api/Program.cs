@@ -32,6 +32,7 @@ app.MapGet("/api/health", () => Results.Json(new { ok = true, sections = onlineS
 app.MapGet("/api/config", () =>
 {
     string scopes = Environment.GetEnvironmentVariable("EAT_EXO_SCOPES") ?? "https://outlook.office365.com/.default";
+    string gscopes = Environment.GetEnvironmentVariable("EAT_GRAPH_SCOPES") ?? "User.Read.All Organization.Read.All";
     var sources = new List<string>();
     string envSrc = Environment.GetEnvironmentVariable("EAT_MSAL_SRC") ?? "";
     if (!string.IsNullOrWhiteSpace(envSrc)) sources.Add(envSrc.Trim());
@@ -40,7 +41,8 @@ app.MapGet("/api/config", () =>
     {
         clientId = (Environment.GetEnvironmentVariable("EAT_CLIENT_ID") ?? "").Trim(),
         msalSources = sources,
-        exoScopes = scopes.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+        exoScopes = scopes.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries),
+        graphScopes = gscopes.Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
     });
 });
 
@@ -89,12 +91,18 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
     if (section == null) return Results.Json(new { error = "Unknown or on-premises-only section: " + sectionId }, statusCode: 422);
 
     // Bearer token = EXO delegated access token for https://outlook.office365.com.
-    // Never persisted, never logged. Forwarded to worker in-memory only.
+    // Graph sections (AuditScope.Graph) additionally need the Microsoft Graph
+    // delegated token via X-Graph-Token (never persisted, never logged).
+    // Both are forwarded to the worker in-memory only.
     string auth = req.Headers.Authorization.ToString();
     string token = auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase) ? auth.Substring(7).Trim() : "";
+    string graphToken = req.Headers.TryGetValue("X-Graph-Token", out var gtv) ? gtv.ToString().Trim() : "";
+    if (graphToken.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) graphToken = graphToken.Substring(7).Trim();
     string org = req.Headers.TryGetValue("X-Tenant-Id", out var tv) ? tv.ToString() : "";
     if (root.TryGetProperty("organization", out var orgProp)) org = orgProp.GetString() ?? org;
-    if (string.IsNullOrEmpty(token)) return Results.Json(new { error = "Missing Authorization: Bearer <EXO access token>" }, statusCode: 401);
+    bool isGraph = section.Scope == AuditScope.Graph;
+    if (isGraph && string.IsNullOrEmpty(graphToken)) return Results.Json(new { error = "Missing X-Graph-Token header (Microsoft Graph access token for this license audit)" }, statusCode: 401);
+    if (!isGraph && string.IsNullOrEmpty(token)) return Results.Json(new { error = "Missing Authorization: Bearer <EXO access token>" }, statusCode: 401);
     if (string.IsNullOrEmpty(org)) return Results.Json(new { error = "Missing tenant organization (X-Tenant-Id header or organization field)" }, statusCode: 422);
 
     // Validate selection against allow-list. No raw PowerShell accepted from client.
@@ -161,7 +169,7 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
         try
         {
             job.Status = "running";
-            var payload = JsonSerializer.Serialize(new { jobId, organization = org, script = auditBody, includeXlsx });
+            var payload = JsonSerializer.Serialize(new { jobId, organization = org, script = auditBody, includeXlsx, graphToken });
             using var fwd = new HttpRequestMessage(HttpMethod.Post, baseUrl + "/run");
             fwd.Content = new StringContent(payload, Encoding.UTF8, "application/json");
             fwd.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
@@ -214,7 +222,7 @@ app.MapPost("/api/jobs", async (HttpRequest req) =>
             job.Status = "failed";
             job.Error = ex.Message;
         }
-        finally { token = ""; } // drop reference ASAP
+        finally { token = ""; graphToken = ""; } // drop references ASAP
     });
 
     return Results.Json(new { jobId, status = job.Status });

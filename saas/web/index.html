@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Exchange Online Audit Tool</title>
+<title>M365 Audit Tool</title>
 <link rel="stylesheet" href="portal.css?v=3">
 </head>
 <body>
 <header class="topbar">
   <button class="icon-btn" id="hamburger" data-i18n-aria="menuAria" aria-label="Menu">&#9776;</button>
-  <span class="brand">Exchange Online Audit Tool</span>
+  <span class="brand">M365 Audit Tool</span>
   <div class="topsearch"><input id="topSearch" type="search" data-i18n-ph="searchSections" placeholder="Search audit sections" aria-label="Search audit sections"></div>
   <div class="topright">
     <button class="icon-btn" id="langBtn" title="Changer de langue">EN</button>
@@ -24,16 +24,16 @@
   </nav>
   <main class="content">
     <div id="view-home" class="view">
-      <div class="breadcrumb" data-i18n-html="crumbConnectionHome">Connection &gt; Exchange Audit</div>
-      <h1>Exchange Audit</h1>
+      <div class="breadcrumb" data-i18n-html="crumbConnectionHome">Connection &gt; M365 Audit</div>
+      <h1>M365 Audit</h1>
       <div class="notice" data-i18n-html="noticeHtml"><strong>First time here?</strong> Enter your work email below, then click <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a> (admin, once per tenant) before connecting.</div>
       <div class="card">
         <h2 data-i18n="connectTitle">Connect with Microsoft</h2>
-        <p class="muted" data-i18n="connectDesc">Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). The access token is kept in memory only and dropped on disconnect.</p>
+        <p class="muted" data-i18n="connectDesc">Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). Tokens live in this tab only and are dropped on disconnect or tab close.</p>
         <label><span data-i18n="labelUpn">Work email (UPN)</span>
           <input id="upn" placeholder="you@contoso.onmicrosoft.com" autocomplete="username">
         </label>
-        <label><span data-i18n="labelOrg">Tenant organization</span>
+        <label id="orgRow" style="display:none"><span data-i18n="labelOrg">Tenant organization</span>
           <input id="org" placeholder="contoso.onmicrosoft.com" autocomplete="off">
         </label>
         <div class="row">

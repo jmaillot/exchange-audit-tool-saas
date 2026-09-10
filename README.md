@@ -1,6 +1,6 @@
-# Exchange Audit SaaS (Exchange Online)
+# Microsoft 365 Audit Tool (Exchange Online + Licensing)
 
-Dockerized SaaS port of the Exchange Audit Tool: 25 Exchange Online audit sections with the same selectable properties and `;`-delimited CSV + XLSX export, Azure Portal-style web UI, single multi-tenant Entra app (token in memory only, dropped on disconnect).
+Dockerized SaaS port of the Exchange Audit Tool: 27 audit sections (25 Exchange Online + 2 license sections via Microsoft Graph) with the same selectable properties and `;`-delimited CSV + XLSX export, Azure Portal-style web UI, single multi-tenant Entra app (tokens in tab session only: F5-safe, dropped on disconnect or tab close).
 
 Start here: [`saas/README.md`](saas/README.md) — multi-tenant app setup, Docker Compose setup, usage, API reference, troubleshooting.
 

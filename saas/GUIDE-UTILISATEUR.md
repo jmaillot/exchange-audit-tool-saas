@@ -1,4 +1,4 @@
-# Guide utilisateur — Exchange Online Audit Tool
+# Guide utilisateur — M365 Audit Tool
 
 L'interface est disponible en français et en anglais : bouton **FR/EN** en haut à droite (le choix est mémorisé). Les noms de propriétés Exchange restent toujours en anglais car ce sont les noms techniques (colonnes PowerShell/CSV).
 
@@ -8,7 +8,7 @@ L'interface est disponible en français et en anglais : bouton **FR/EN** en haut
 2. Tapez votre **adresse e-mail professionnelle** (UPN, ex. `vous@contoso.onmicrosoft.com`).
 3. **Première fois dans votre organisation ?** Cliquez le lien **Register this tenant** dans le bandeau bleu (un administrateur doit valider, une seule fois par tenant), puis revenez ici.
 4. Cliquez **Se connecter avec Microsoft** et connectez-vous avec un compte lecteur Exchange (ex. rôle *View-Only Organization Management*).
-5. Le bandeau en haut passe au vert. Le jeton d'accès reste **en mémoire uniquement** : **Disconnect** le jette.
+5. Le bandeau en haut passe au vert. Le jeton d'accès reste **dans l'onglet uniquement** (survit à F5, jamais sur disque) : **Disconnect** ou la fermeture de l'onglet le jette.
 
 ## 2. Lancer un audit
 

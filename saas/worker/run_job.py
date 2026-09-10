@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Exchange Audit worker: executes the API-generated audit script with pwsh.
 
-POST /run {jobId, organization, script, includeXlsx}
+POST /run {jobId, organization, script, includeXlsx, graphToken}
   Authorization: Bearer <EXO delegated access token for https://outlook.office365.com>
-  Writes /data/<jobId>.csv (+ .log). Token is kept in memory only, never logged.
+  graphToken: Microsoft Graph delegated token (license sections only,
+    forwarded by the API from the X-Graph-Token header).
+  Writes /data/<jobId>.csv (+ .log). Tokens are kept in memory only, never logged.
+
+EXO scripts run under Connect-ExchangeOnline; Graph scripts (Invoke-RestMethod
+against graph.microsoft.com) run with $env:EAT_GRAPH_TOKEN and no EXO
+connection. Protection sections use Connect-IPPSSession.
 
 GET /health -> {ok, demoMode, exoModule}
 
-EAT_DEMO_MODE=true generates a fake CSV from the Export-Csv column list so the
+EAT_DEMO_MODE=true generates a fake CSV from the Select-Object column list so the
 UI can be tested without a tenant. Protection sections use Connect-IPPSSession.
 """
 import csv
@@ -33,6 +39,10 @@ def demo_csv(job_id, script):
     # Extract selected column names from the generated `Select-Object a,b,c` tail.
     cols = ["DisplayName", "PrimarySmtpAddress"]
     m = re.search(r"Select-Object\s+([^|\n]+?)\s*\|", script)
+    if not m:
+        # Graph-style scripts assign `$rows = ... | Select-Object a,b` on its
+        # own line (Export-Csv is a separate statement): accept end-of-line.
+        m = re.search(r"Select-Object\s+([^\n]+)", script)
     if m:
         raw = [c.strip().strip('"').strip("'") for c in m.group(1).split(",")]
         cols = [c for c in raw if c and not c.startswith("@")] or cols
@@ -55,23 +65,36 @@ def read_tail(job_id, max_chars=6000):
         return ""
 
 
-def run_real(job_id, org, script, token):
+def is_graph_script(script):
+    return "graph.microsoft.com" in (script or "").lower()
+
+
+def run_real(job_id, org, script, token, graph_token=""):
     log_path = os.path.join(DATA, job_id + ".log")
     csv_path = os.path.join(DATA, job_id + ".csv")
-    is_protection = "Get-HostedContentFilterPolicy" in script or "Get-MalwareFilterPolicy" in script \
-        or "Get-AntiPhishPolicy" in script or "Get-SafeLinksPolicy" in script or "Get-DlpPolicy" in script
-    connect = (
-        "Import-Module ExchangeOnlineManagement -ErrorAction Stop\n"
-        "$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'\n"
-        "Connect-ExchangeOnline -AccessToken $env:EAT_TOKEN -Organization $env:EAT_ORG -ShowBanner:$false\n"
-    )
-    if is_protection:
-        connect += "Connect-IPPSSession -AccessToken $env:EAT_TOKEN -Organization $env:EAT_ORG\n"
-    wrapper = connect + "\n" + script + "\nDisconnect-ExchangeOnline -Confirm:$false\n"
+    if is_graph_script(script):
+        if not graph_token:
+            raise RuntimeError("graph audit requires a Graph access token")
+        wrapper = (
+            "$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'\n"
+            + script
+        )
+        env = dict(os.environ, EAT_GRAPH_TOKEN=graph_token, EAT_ORG=org)
+    else:
+        is_protection = "Get-HostedContentFilterPolicy" in script or "Get-MalwareFilterPolicy" in script \
+            or "Get-AntiPhishPolicy" in script or "Get-SafeLinksPolicy" in script or "Get-DlpPolicy" in script
+        connect = (
+            "Import-Module ExchangeOnlineManagement -ErrorAction Stop\n"
+            "$ProgressPreference='SilentlyContinue'; $ErrorActionPreference='Stop'\n"
+            "Connect-ExchangeOnline -AccessToken $env:EAT_TOKEN -Organization $env:EAT_ORG -ShowBanner:$false\n"
+        )
+        if is_protection:
+            connect += "Connect-IPPSSession -AccessToken $env:EAT_TOKEN -Organization $env:EAT_ORG\n"
+        wrapper = connect + "\n" + script + "\nDisconnect-ExchangeOnline -Confirm:$false\n"
+        env = dict(os.environ, EAT_TOKEN=token, EAT_ORG=org)
     with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False, encoding="utf-8") as tf:
         tf.write(wrapper)
         ps1 = tf.name
-    env = dict(os.environ, EAT_TOKEN=token, EAT_ORG=org)
     try:
         with open(log_path, "w", encoding="utf-8") as log:
             p = subprocess.run(["pwsh", "-NoProfile", "-File", ps1],
@@ -165,17 +188,23 @@ class Handler(BaseHTTPRequestHandler):
         job_id = re.sub(r"[^a-z0-9]", "", str(payload.get("jobId", "")).lower())
         org = str(payload.get("organization", ""))
         script = str(payload.get("script", ""))
+        graph_token = str(payload.get("graphToken", ""))
         if not job_id or not script or not org:
             self._json(422, {"error": "jobId, organization and script are required"})
             return
-        if not token and not DEMO:
-            self._json(401, {"error": "missing Bearer EXO access token"})
-            return
+        if not DEMO:
+            if is_graph_script(script):
+                if not graph_token:
+                    self._json(401, {"error": "missing Graph access token"})
+                    return
+            elif not token:
+                self._json(401, {"error": "missing Bearer EXO access token"})
+                return
         try:
             if DEMO:
                 demo_csv(job_id, script)
             else:
-                run_real(job_id, org, script, token)
+                run_real(job_id, org, script, token, graph_token)
             self._json(200, {"ok": True})
         except subprocess.TimeoutExpired:
             self._json(500, {"error": "audit timed out", "log": read_tail(job_id)})
@@ -183,6 +212,7 @@ class Handler(BaseHTTPRequestHandler):
             self._json(500, {"error": str(ex), "log": read_tail(job_id)})
         finally:
             token = ""
+            graph_token = ""
 
 
 if __name__ == "__main__":

@@ -5,5 +5,6 @@
 window.EAT_CONFIG = {
   clientId: "",
   msalSources: ["./msal-browser.min.js"],
-  exoScopes: ["https://outlook.office365.com/.default"]
+  exoScopes: ["https://outlook.office365.com/.default"],
+  graphScopes: ["User.Read.All", "Organization.Read.All"]
 };

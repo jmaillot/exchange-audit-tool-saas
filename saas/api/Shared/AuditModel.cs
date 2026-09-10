@@ -4,7 +4,7 @@ using System.Text;
 
 namespace ExchangeAuditTool
 {
-    internal enum AuditScope { ExchangeOnline, OnPremises, Both }
+    internal enum AuditScope { ExchangeOnline, OnPremises, Both, Graph }
 
     internal enum GroupMode { MultiCheck, SingleChoice }
 
@@ -161,6 +161,7 @@ namespace ExchangeAuditTool
             SectionsDomainsRouting.Register();
             SectionsOrganization.Register();
             SectionsProtection.Register();
+            SectionsLicenses.Register();
         }
     }
 }

@@ -1,6 +1,6 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null, connLabel: null };
+const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, graphToken: "", graphTokenExp: 0, restoring: false, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null, connLabel: null };
 // UI chrome dictionary. Anything served by /api/sections (section/category/
 // group/option names, CSV columns) is NEVER translated on purpose.
 const I18N = {
@@ -8,13 +8,15 @@ en: {
   searchSections: "Search audit sections", menuAria: "Menu", accountAria: "Account", navAria: "Navigation",
   navConnection: "Connection", navMonitor: "Monitor", navActivity: "Activity log",
   groupSys: "Connection & Monitor",
-  crumbConnectionHome: "Connection &gt; Exchange Audit",
+  crumbConnectionHome: "Connection &gt; M365 Audit",
   noticeHtml: `<strong>First time here?</strong> Enter your work email below, then click <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a> (admin, once per tenant) before connecting.`,
   connectTitle: "Connect with Microsoft",
-  connectDesc: "Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). The access token is kept in memory only and dropped on disconnect.",
+  connectDesc: "Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). Tokens live in this tab only and are dropped on disconnect or tab close.",
   labelUpn: "Work email (UPN)", labelOrg: "Tenant organization",
   connectBtn: "Connect with Microsoft", disconnectBtn: "Disconnect & drop token",
-  coverageTitle: "Coverage (Exchange Online, {n} sections)",
+  coverageTitle: "Coverage ({n} sections)",
+  covSection: "Section", covCategory: "Category", covProduct: "Product",
+  productLicensing: "Licensing", productExchangeOnline: "Exchange Online",
   crumbConnection: "Connection",
   slowBadge: "Slow options selected - this run may take longer",
   filterOptions: "Filter options",
@@ -24,12 +26,12 @@ en: {
   resultsPreview: "Results preview", resultsTable: "Results", noResults: "No results yet.",
   crumbActivity: "Connection &gt; Activity log", activityTitle: "Activity log",
   connectedAs: "Connected: {label}", notConnected: "Not connected",
-  statusConnected: "Connected (token in memory only).", statusDisconnected: "Disconnected, token dropped.",
+  statusConnected: "Connected (tab-session token).", statusDisconnected: "Disconnected, token dropped.",
   enterUpn: "Enter your work email (UPN).",
   serverNotConfigured: "Server not configured: missing clientId (see .env EAT_CLIENT_ID).",
   msalUnavailable: "Microsoft login unavailable — please contact your administrator.",
   openingSignin: "Opening Microsoft sign-in...",
-  signedInLog: "Signed in as {upn} (tenant {org}). Token held in memory.",
+  signedInLog: "Signed in as {upn} (tenant {org}). Tab-session token.",
   signinFailed: "Sign-in failed: {err}", signinErrorLog: "Sign-in error: {err}", msalLoadLog: "MSAL load failed: {src}",
   tokenRefreshedLog: "Token refreshed silently.", disconnectedLog: "Disconnected, token dropped.",
   connectFirstAlert: "Connect first (Connection page).",
@@ -45,19 +47,21 @@ en: {
   slowTag: "slow",
   smartTitle: "Smart mode", smartHint: "Keeps only columns that have a value on at least one row.",
   smartLabel: "Auto-detect populated properties only (recommended)",
-  sectionsLoadedLog: "Loaded {n} Exchange Online sections from API."
+  sectionsLoadedLog: "Loaded {n} sections from API."
 },
 fr: {
   searchSections: "Rechercher des sections", menuAria: "Menu", accountAria: "Compte", navAria: "Navigation",
   navConnection: "Connexion", navMonitor: "Supervision", navActivity: "Journal d'activité",
   groupSys: "Connexion & Monitor",
-  crumbConnectionHome: "Connexion &gt; Exchange Audit",
+  crumbConnectionHome: "Connexion &gt; M365 Audit",
   noticeHtml: `<strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a> (admin, une seule fois par tenant) avant de vous connecter.`,
   connectTitle: "Se connecter avec Microsoft",
-  connectDesc: "Saisissez votre e-mail professionnel (UPN) et connectez-vous chez Microsoft avec un compte lecteur Exchange (ex. View-Only Organization Management). Le jeton d'accès est conservé en mémoire uniquement et supprimé à la déconnexion.",
+  connectDesc: "Saisissez votre e-mail professionnel (UPN) et connectez-vous chez Microsoft avec un compte lecteur Exchange (ex. View-Only Organization Management). Les jetons restent dans cet onglet uniquement et sont supprimés à la déconnexion ou à la fermeture de l'onglet.",
   labelUpn: "E-mail professionnel (UPN)", labelOrg: "Organisation du tenant",
   connectBtn: "Se connecter avec Microsoft", disconnectBtn: "Se déconnecter",
-  coverageTitle: "Couverture (Exchange Online, {n} sections)",
+  coverageTitle: "Couverture ({n} sections)",
+  covSection: "Section", covCategory: "Catégorie", covProduct: "Produit",
+  productLicensing: "Licences", productExchangeOnline: "Exchange Online",
   crumbConnection: "Connexion",
   slowBadge: "Options lentes sélectionnées — l'exécution sera bien plus longue",
   filterOptions: "Filtrer les options",
@@ -67,12 +71,12 @@ fr: {
   resultsPreview: "Aperçu des résultats", resultsTable: "Résultats", noResults: "Aucun résultat pour l'instant.",
   crumbActivity: "Connexion &gt; Journal d'activité", activityTitle: "Journal d'activité",
   connectedAs: "Connecté : {label}", notConnected: "Non connecté",
-  statusConnected: "Connecté (jeton en mémoire uniquement).", statusDisconnected: "Déconnecté, jeton supprimé.",
+  statusConnected: "Connecté (jeton de session).", statusDisconnected: "Déconnecté, jeton supprimé.",
   enterUpn: "Saisissez votre e-mail professionnel (UPN).",
   serverNotConfigured: "Serveur non configuré : clientId manquant (voir .env EAT_CLIENT_ID).",
   msalUnavailable: "Connexion Microsoft indisponible — contactez votre administrateur.",
   openingSignin: "Ouverture de la connexion Microsoft…",
-  signedInLog: "Connecté en tant que {upn} (tenant {org}). Jeton en mémoire.",
+  signedInLog: "Connecté en tant que {upn} (tenant {org}). Jeton de session.",
   signinFailed: "Échec de connexion : {err}", signinErrorLog: "Erreur de connexion : {err}", msalLoadLog: "Chargement MSAL impossible : {src}",
   tokenRefreshedLog: "Jeton actualisé silencieusement.", disconnectedLog: "Déconnecté, jeton supprimé.",
   connectFirstAlert: "Connectez-vous d'abord (page Connexion).",
@@ -88,7 +92,7 @@ fr: {
   slowTag: "lent",
   smartTitle: "Mode intelligent", smartHint: "Ne garde que les colonnes ayant une valeur sur au moins une ligne.",
   smartLabel: "Détection auto des propriétés remplies uniquement (recommandé)",
-  sectionsLoadedLog: "{n} sections Exchange Online chargées depuis l'API."
+  sectionsLoadedLog: "{n} sections chargées depuis l'API."
 }};
 let lang = "en";
 try { lang = localStorage.getItem("eat.lang") || ((navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en"); } catch (e) {}
@@ -98,9 +102,33 @@ function t(key, vars) {
   if (vars) for (const k in vars) s = s.split("{" + k + "}").join(vars[k]);
   return s;
 }
+function maskMid(s) {
+  // Privacy: keep first 2 + last char, hide the middle
+  // ("hswtfrance59820" -> "hs•••0", "adm-pdw-jmaillot" -> "ad•••t").
+  s = String(s || "");
+  if (s.length <= 4) return "•••";
+  return s.slice(0, 2) + "•••" + s.slice(-1);
+}
+function maskHost(host) {
+  // Mask only the tenant label, keep the public suffix readable
+  // ("hswtfrance59820.onmicrosoft.com" -> "hs•••0.onmicrosoft.com").
+  const parts = String(host || "").split(".");
+  parts[0] = maskMid(parts[0]);
+  return parts.join(".");
+}
+function maskId(s) {
+  // Mask a UPN or domain for on-screen display. Full values stay in the
+  // hover tooltip and out of screenshots.
+  const i = String(s || "").indexOf("@");
+  if (i < 0) return maskHost(s);
+  return maskMid(s.slice(0, i)) + "@" + maskHost(s.slice(i + 1));
+}
 function refreshConnText() {
   const label = state.connLabel ? t("connectedAs", { label: state.connLabel }) : t("notConnected");
-  $("connText").textContent = label; $("connDot").title = label;
+  $("connText").textContent = state.connLabel && state.upn
+    ? t("connectedAs", { label: state.upn })
+    : t("notConnected");
+  $("connDot").title = label;
   $("connDot").classList.toggle("on", !!state.connLabel);
 }
 function applyI18n() {
@@ -126,13 +154,17 @@ function setLang(l) {
 }
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
-  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"] },
+  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"], graphScopes: ["User.Read.All", "Organization.Read.All"] },
   window.EAT_CONFIG || {});
 fetch("api/config").then(r => r.json()).then(c => {
   if (c.clientId) EAT_CFG.clientId = c.clientId;
   if (c.msalSources && c.msalSources.length) EAT_CFG.msalSources = c.msalSources;
   if (c.exoScopes && c.exoScopes.length) EAT_CFG.exoScopes = c.exoScopes;
+  if (c.graphScopes && c.graphScopes.length) EAT_CFG.graphScopes = c.graphScopes;
   updateRegisterLink();
+  // Config may arrive after the first restore attempt (clientId was empty):
+  // retry the silent session restore once it is known.
+  if (!state.msalAccount) restoreSession();
 }).catch(() => {});
 const $ = id => document.getElementById(id);
 const logEl = () => $("activityLog");
@@ -143,7 +175,9 @@ function log(msg) {
   logEl().scrollTop = 1e9;
 }
 function authHeaders() {
-  return { "Content-Type": "application/json", "Authorization": "Bearer " + state.token, "X-Tenant-Id": state.org };
+  const h = { "Content-Type": "application/json", "Authorization": "Bearer " + state.token, "X-Tenant-Id": state.org };
+  if (state.graphToken) h["X-Graph-Token"] = "Bearer " + state.graphToken;
+  return h;
 }
 
 async function loadSections() {
@@ -166,12 +200,25 @@ function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
   const cats = {};
   state.sections.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
+  // System entries first, then one collapsible block per category,
+  // grouped under a product header (Exchange Online, Licensing, …).
   const groups = [{ cat: t("groupSys"), items: [
     { id: "__home", title: t("navConnection"), view: "home" },
     { id: "__activity", title: t("navActivity"), view: "activity" }
   ] }];
-  Object.keys(cats).sort().forEach(cat => groups.push({ cat, items: cats[cat].map(s => ({ id: s.id, title: s.navTitle })) }));
+  [["exo", "productExchangeOnline"], ["licensing", "productLicensing"]].forEach(([pk, key]) => {
+    Object.keys(cats).sort().forEach(cat => {
+      const items = cats[cat].filter(s => productOf(s) === pk).map(s => ({ id: s.id, title: s.navTitle }));
+      if (items.length) groups.push({ cat, items, product: t(key) });
+    });
+  });
+  let lastProduct = null;
   groups.forEach(g => {
+    if (g.product && g.product !== lastProduct) {
+      const ph = document.createElement("div");
+      ph.className = "nav-section"; ph.textContent = g.product;
+      host.appendChild(ph); lastProduct = g.product;
+    }
     const block = document.createElement("div");
     block.className = "nav-block"; block.dataset.cat = g.cat;
     const head = document.createElement("button");
@@ -199,9 +246,26 @@ function renderNav() {
   });
 }
 
+function productOf(s) {
+  // Nav + coverage group sections per product. New products (SharePoint,
+  // Teams…) get their own branch here; everything Exchange stays default.
+  return (s.category === "Licensing") ? "licensing" : "exo";
+}
 function renderCoverage() {
   $("coverageTitle").textContent = t("coverageTitle", { n: state.sections.length });
-  $("coverage").innerHTML = state.sections.map(s => `<div>${esc(s.navTitle)}</div>`).join("");
+  // One clear table: Section | Category | Product, grouped by product,
+  // then category, then section name. Same productOf() source as the menu.
+  const rows = [];
+  [["exo", "productExchangeOnline"], ["licensing", "productLicensing"]].forEach(([pk, key]) => {
+    state.sections
+      .filter(s => productOf(s) === pk)
+      .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.navTitle.localeCompare(b.navTitle))
+      .forEach(s => rows.push(
+        `<tr><td>${esc(s.navTitle)}</td><td>${esc(s.category || "Other")}</td><td>${esc(t(key))}</td></tr>`));
+  });
+  $("coverage").innerHTML =
+    `<table class="cov"><thead><tr><th>${esc(t("covSection"))}</th><th>${esc(t("covCategory"))}</th><th>${esc(t("covProduct"))}</th></tr></thead>` +
+    `<tbody>${rows.join("")}</tbody></table>`;
 }
 
 function showView(v) {
@@ -315,6 +379,11 @@ function resetResults() {
 async function runAudit() {
   if (!state.token || !state.org) { alert(t("connectFirstAlert")); showView("home"); return; }
   try { await ensureToken(); } catch (e) { $("resultInfo").textContent = t("sessionExpired"); log(t("tokenRefreshFailedLog", { err: e.message || e })); return; }
+  if (state.current && state.current.scope === "Graph" && !state.graphToken) {
+    try { await ensureGraphToken(false); }
+    catch (e) { $("resultInfo").textContent = t("sessionExpired"); log(t("tokenRefreshFailedLog", { err: e.message || e })); return; }
+    if (!state.graphToken) { alert(t("connectFirstAlert")); showView("home"); return; }
+  }
   const sel = selection();
   const nativeAuto = state.current.groups.some(g => g.key === "auto");
   const smart = nativeAuto ? (sel.auto || []).includes("autodetect") : state.smartMode;
@@ -389,14 +458,14 @@ function pollStart() {
 }
 function pollStop() { if (state.poll) clearInterval(state.poll); state.poll = null; }
 function renderGrid(header, rows, note) {
-  const t = $("grid"); t.innerHTML = "";
+  const tbl = $("grid"); tbl.innerHTML = "";
   const trh = document.createElement("tr");
   header.forEach(h => { const th = document.createElement("th"); th.textContent = h; th.title = h; trh.appendChild(th); });
-  t.appendChild(trh);
+  tbl.appendChild(trh);
   rows.forEach(r => {
     const tr = document.createElement("tr");
     r.forEach(c => { const td = document.createElement("td"); td.textContent = c ?? ""; td.title = c ?? ""; tr.appendChild(td); });
-    t.appendChild(tr);
+    tbl.appendChild(tr);
   });
   $("resultInfo").textContent = t("previewLabel", { cols: header.length, rows: rows.length }) + (note || "");
 }
@@ -415,7 +484,15 @@ $("selectAll").onclick = () => {
 };
 $("filter").oninput = e => renderGroups(e.target.value);
 $("runBtn").onclick = runAudit;
-$("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log(t("cancelLog")); };
+$("cancelBtn").onclick = async () => {
+  // "Cancel" only stops watching: the server job keeps running. Take one
+  // final refresh so the screen shows the truth instead of a frozen
+  // "queued" label with disabled downloads; reopening the section resumes
+  // live polling for a still-running job.
+  pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
+  log(t("cancelLog"));
+  try { if (state.jobId) await fetchJobStatus(); } catch (e) { log(t("tokenRefreshFailedLog", { err: e.message || e })); }
+};
 $("crumbHome").onclick = e => { e.preventDefault(); showView("home"); };
 $("hamburger").onclick = () => $("sidenav").classList.toggle("hidden");
 $("langBtn").onclick = () => setLang(lang === "fr" ? "en" : "fr");
@@ -425,7 +502,7 @@ function setConnected(label) {
   refreshConnText();
 }
 function setDisconnected(msg) {
-  state.token = ""; state.tokenExp = 0; state.msalAccount = null; state.jobId = null; state.connLabel = null; pollStop();
+  state.token = ""; state.tokenExp = 0; state.graphToken = ""; state.graphTokenExp = 0; state.msalAccount = null; state.jobId = null; state.connLabel = null; pollStop();
   $("homeStatus").textContent = msg || t("statusDisconnected");
   refreshConnText();
 }
@@ -456,6 +533,79 @@ $("upn").oninput = () => {
   updateRegisterLink();
 };
 $("org").oninput = updateRegisterLink;
+async function loadMsal() {
+  if (!window.msal) {
+    for (const src of (EAT_CFG.msalSources || ["./msal-browser.min.js"])) {
+      try { await loadScript(src); if (window.msal) break; }
+      catch (e) { log(t("msalLoadLog", { src })); }
+    }
+  }
+  return !!window.msal;
+}
+async function buildMsal(domain) {
+  // Tab-lifetime session: tokens survive F5 (sessionStorage), die with the
+  // tab, never touch disk (no localStorage), never reach our servers.
+  const app = new window.msal.PublicClientApplication({
+    auth: { clientId: EAT_CFG.clientId, authority: "https://login.microsoftonline.com/" + domain },
+    cache: { cacheLocation: "sessionStorage" }
+  });
+  if (app.initialize) await app.initialize(); // MSAL v3+: required before any API call
+  return app;
+}
+function persistSession(domain) {
+  // Non-sensitive routing hints only (org/domain/UPN). Tokens stay inside
+  // MSAL's own sessionStorage entries and are never handled here.
+  try {
+    sessionStorage.setItem("eat.org", state.org);
+    sessionStorage.setItem("eat.domain", domain);
+    sessionStorage.setItem("eat.upn", state.upn);
+  } catch (e) {}
+}
+function clearPersistedSession() {
+  // Local sign-out: drop MSAL's tab cache (access + refresh tokens) and our
+  // session keys. Nothing ever left the tab, so no server call is needed.
+  try {
+    const drop = [];
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i);
+      if (k && (k.indexOf("msal.") === 0 || k.indexOf("eat.") === 0)) drop.push(k);
+    }
+    drop.forEach(k => sessionStorage.removeItem(k));
+  } catch (e) {}
+}
+async function restoreSession() {
+  // F5 survival: rebuild the session silently from the tab cache. Any failure
+  // just means "stay disconnected" — never a popup, never a thrown error.
+  // Guarded: startup + config-arrival can trigger two overlapping attempts.
+  if (state.restoring || state.msalAccount) return;
+  state.restoring = true;
+  try {
+    const domain = sessionStorage.getItem("eat.domain") || "";
+    const upn = sessionStorage.getItem("eat.upn") || "";
+    if (!domain || !EAT_CFG.clientId) return;
+    if (!(await loadMsal())) return;
+    const app = await buildMsal(domain);
+    const accounts = app.getAllAccounts() || [];
+    const account = accounts.find(a => a.username === upn) || accounts[0];
+    if (!account) return;
+    app.setActiveAccount(account);
+    const tok = await app.acquireTokenSilent({
+      scopes: EAT_CFG.exoScopes || ["https://outlook.office365.com/.default"],
+      account
+    });
+    state.msal = app; state.msalAccount = account;
+    state.token = tok.accessToken;
+    state.tokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
+    state.upn = account.username || upn;
+    state.org = sessionStorage.getItem("eat.org") || domain;
+    if ($("upn") && !$("upn").value) $("upn").value = state.upn;
+    if ($("org")) $("org").value = state.org;
+    try { await ensureGraphToken(true); } catch (e) { log(t("tokenRefreshFailedLog", { err: "Graph: " + (e.message || e) })); }
+    setConnected(state.org + " (" + state.upn + ")");
+    log(t("signedInLog", { upn: maskId(state.upn), org: maskHost(state.org) }));
+  } catch (e) { log(t("signinErrorLog", { err: e.message || e })); }
+  finally { state.restoring = false; }
+}
 $("connectBtn").onclick = async () => {
   const upn = $("upn").value.trim();
   const domain = upnDomain(upn);
@@ -464,23 +614,13 @@ $("connectBtn").onclick = async () => {
     $("homeStatus").textContent = t("serverNotConfigured");
     return;
   }
-  if (!window.msal) {
-    for (const src of (EAT_CFG.msalSources || ["./msal-browser.min.js"])) {
-      try { await loadScript(src); if (window.msal) break; }
-      catch (e) { log(t("msalLoadLog", { src })); }
-    }
-  }
-  if (!window.msal) {
+  if (!(await loadMsal())) {
     $("homeStatus").textContent = t("msalUnavailable");
     return;
   }
   try {
     $("homeStatus").textContent = t("openingSignin");
-    // Tokens cached in memory only (never localStorage/sessionStorage).
-    const app = new window.msal.PublicClientApplication({
-      auth: { clientId: EAT_CFG.clientId, authority: "https://login.microsoftonline.com/" + domain },
-      cache: { cacheLocation: "memory" }
-    });
+    const app = await buildMsal(domain);
     const scopes = EAT_CFG.exoScopes || ["https://outlook.office365.com/.default"];
     const login = await app.loginPopup({ scopes, loginHint: upn });
     app.setActiveAccount(login.account);
@@ -490,8 +630,16 @@ $("connectBtn").onclick = async () => {
     state.upn = login.account.username || upn;
     state.org = $("org").value.trim() || domain;
     $("org").value = state.org;
+    persistSession(domain);
+    // Second token for the Microsoft Graph license sections (different
+    // resource: silent when consented, popup otherwise). Failure only blocks
+    // the Licensing category, not the Exchange sections.
+    try {
+      state.graphToken = ""; state.graphTokenExp = 0;
+      await ensureGraphToken();
+    } catch (e) { log(t("signinErrorLog", { err: "Graph token: " + (e.message || e) })); }
     setConnected(state.org + " (" + state.upn + ")");
-    log(t("signedInLog", { upn: state.upn, org: state.org }));
+    log(t("signedInLog", { upn: maskId(state.upn), org: maskHost(state.org) }));
   } catch (e) {
     $("homeStatus").textContent = t("signinFailed", { err: e.message || e });
     log(t("signinErrorLog", { err: e.message || e }));
@@ -507,9 +655,32 @@ async function ensureToken() {
     state.tokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
     log(t("tokenRefreshedLog"));
   }
+  // Graph refresh stays best-effort here: a missing/expired Graph token must
+  // never block the Exchange sections. License runs re-acquire interactively.
+  try { await ensureGraphToken(true); } catch (e) { log(t("tokenRefreshFailedLog", { err: "Graph: " + (e.message || e) })); }
+}
+async function ensureGraphToken(silentOnly) {
+  // Graph license token: refresh when missing/expiring. Interactive popup only
+  // during an explicit Connect (silentOnly falsy); background refreshes stay
+  // silent so Exchange polling never pops a window.
+  if (!state.msal || !state.msalAccount) return;
+  if (state.graphToken && Date.now() < state.graphTokenExp - 5 * 60 * 1000) return;
+  const scopes = EAT_CFG.graphScopes || ["User.Read.All", "Organization.Read.All"];
+  try {
+    const tok = await state.msal.acquireTokenSilent({ scopes, account: state.msalAccount });
+    state.graphToken = tok.accessToken;
+    state.graphTokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
+  } catch (e) {
+    if (silentOnly) throw e;
+    const tok = await state.msal.loginPopup({ scopes });
+    state.graphToken = tok.accessToken;
+    state.graphTokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
+    try { state.msal.setActiveAccount(tok.account || state.msalAccount); } catch (e2) {}
+  }
 }
 $("disconnectBtn").onclick = () => {
   state.msal = null;
+  clearPersistedSession();
   setDisconnected();
   log(t("disconnectedLog"));
 };
@@ -540,5 +711,5 @@ $("topSearch").onkeydown = e => {
 };
 
 applyI18n();
-loadSections().then(restoreJob).catch(e => { log(t("apiDownLog", { err: e.message })); $("coverage").textContent = t("apiDownCoverage"); });
+loadSections().then(restoreSession).then(restoreJob).catch(e => { log(t("apiDownLog", { err: e.message })); $("coverage").textContent = t("apiDownCoverage"); });
 updateRegisterLink();
