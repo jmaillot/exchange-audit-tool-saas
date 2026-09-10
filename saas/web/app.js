@@ -1,6 +1,6 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, poll: null, msal: null, msalAccount: null };
+const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null };
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
   { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"] },
@@ -79,7 +79,11 @@ function showView(v) {
 function openSection(id) {
   try {
   const s = state.sections.find(x => x.id === id); if (!s) return;
-  state.current = s; state.checks = {};
+  // Reopening the section of a known job resumes its live view instead of
+  // wiping it (the job keeps running server-side either way).
+  const resume = state.jobId && state.jobSection === id;
+  state.current = s;
+  if (!resume) state.checks = {};
   showView("section");
   document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === id));
   $("crumbSection").textContent = s.navTitle;
@@ -87,7 +91,9 @@ function openSection(id) {
   $("secSub").textContent = s.subtitle || "";
   $("filter").value = "";
   renderGroups("");
-  updateSlow(); pollStop(); resetResults();
+  updateSlow();
+  if (resume) { if (!state.poll) pollStart(); else fetchJobStatus(); }
+  else { pollStop(); resetResults(); state.jobSection = null; state.jobStart = 0; }
   } catch (e) { log("Failed to open section: " + (e.message || e)); }
 }
 
@@ -184,24 +190,35 @@ async function runAudit() {
   const j = await r.json();
   if (!r.ok) { $("resultInfo").textContent = "Error: " + (j.error || r.status); log("FAILED: " + JSON.stringify(j)); $("runBtn").disabled = false; $("cancelBtn").disabled = true; return; }
   state.jobId = j.jobId;
+  state.jobSection = state.current.id;
+  state.jobStart = Date.now();
   log("Job " + j.jobId + " started.");
   pollStart();
 }
+function fmtElapsed(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  const p = n => String(n).padStart(2, "0");
+  return p(Math.floor(s / 3600)) + ":" + p(Math.floor(s % 3600 / 60)) + ":" + p(s % 60);
+}
+async function fetchJobStatus() {
+  const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
+  const j = await r.json();
+  const elapsed = state.jobStart ? fmtElapsed(Date.now() - state.jobStart) : "--:--:--";
+  const active = j.status === "running" || j.status === "queued";
+  const note = `${active ? "Running... " + elapsed : "Finished in " + elapsed} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
+  if (j.header) renderGrid(j.header, j.preview || [], note);
+  else $("resultInfo").textContent = note;
+  if (j.log) { $("jobLog").textContent = j.log.slice(-8000); $("jobLog").classList.remove("hidden"); }
+  if (j.status === "succeeded" || j.status === "failed") {
+    pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
+    $("dlCsv").disabled = !j.hasCsv; $("dlXlsx").disabled = !j.hasXlsx;
+    log(`Job ${state.jobId} ${j.status} in ${elapsed}${j.header ? " (" + j.header.length + " columns)" : ""}.`);
+  }
+}
 function pollStart() {
   pollStop();
-  state.poll = setInterval(async () => {
-    const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
-    const j = await r.json();
-    const note = `Status: ${j.status} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
-    if (j.header) renderGrid(j.header, j.preview || [], note);
-    else $("resultInfo").textContent = note;
-    if (j.log) { $("jobLog").textContent = j.log.slice(-8000); $("jobLog").classList.remove("hidden"); }
-    if (j.status === "succeeded" || j.status === "failed") {
-      pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
-      $("dlCsv").disabled = !j.hasCsv; $("dlXlsx").disabled = !j.hasXlsx;
-      log(`Job ${state.jobId} ${j.status}.`);
-    }
-  }, 3000);
+  fetchJobStatus();
+  state.poll = setInterval(fetchJobStatus, 3000);
 }
 function pollStop() { if (state.poll) clearInterval(state.poll); state.poll = null; }
 function renderGrid(header, rows, note) {
@@ -215,7 +232,6 @@ function renderGrid(header, rows, note) {
     t.appendChild(tr);
   });
   $("resultInfo").textContent = `${header.length} columns x ${rows.length} rows (preview of first 200). ` + (note || "");
-  log(`Preview: ${header.length} columns, ${rows.length} rows shown.`);
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
