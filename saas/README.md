@@ -22,7 +22,12 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 1. Entra admin center (`entra.microsoft.com`) → **Identity** → **Applications** → **App registrations** → **New registration**: name `Exchange Audit SaaS`, supported account types **Accounts in any organizational directory (multitenant)**. Note the **Application (client) ID** → put it in `saas/.env` as `EAT_CLIENT_ID=`.
 2. API permissions (exact clicks) — still on your app page, left menu **Manage → API permissions** → **Add a permission** → tab **APIs my organization uses** → search `Office 365 Exchange Online` → select it → **Delegated permissions** → tick **`Exchange.Manage`** → **Add permissions**. Then **Add a permission** → **Microsoft Graph** → **Delegated permissions** → `User.Read` is already there by default. Finish with **Grant admin consent for [your org]** (green checkmarks). No application permissions, no cert needed for delegated flow.
 3. Authentication — left menu **Manage → Authentication** → **Add a platform** → **Single-page application**, redirect URI `https://<your-web>/`, **Save**; then tick **Allow public client flows** → **Save**. The web app signs users in directly (MSAL + PKCE, no secret).
-4. Login library — nothing to do if the server has internet: the web app loads Microsoft's login library from their CDN automatically. Only for offline/air-gapped servers: download `msal-browser.min.js` (UMD build, MSAL.js releases) into `saas/web/` and rebuild `web`.
+4. Login library — Microsoft deprecated the MSAL CDN, so vendor the file once (any machine with Docker):
+  ```bash
+  docker run --rm -v /volume1/docker/exchange-audit-tool-saas/saas/web:/out node:20-alpine sh -c "cd /tmp && npm pack @azure/msal-browser@3 --silent && tar -xzf azure-msal-browser-*.tgz package/lib/msal-browser.min.js && cp package/lib/msal-browser.min.js /out/"
+  cd saas && docker compose -f docker-compose.traefik.yml up -d --build web
+  ```
+  This takes the LTS 3.x UMD build (`msal-browser.min.js`, global `msal`) which matches the login code. Then verify: `docker exec exchange-audit-web ls -la /usr/share/nginx/html/msal-browser.min.js`.
 5. Auditors sign in with an Exchange read role (e.g. **View-Only Organization Management**). Delegated calls inherit their RBAC — no `New-ServicePrincipal` step. First user in a tenant clicks **Register this tenant** in the web UI (admin, one click, pre-filled from the UPN domain); afterwards everyone just signs in.
 
 ## 2. Docker Compose setup

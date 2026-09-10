@@ -35,8 +35,7 @@ app.MapGet("/api/config", () =>
     var sources = new List<string>();
     string envSrc = Environment.GetEnvironmentVariable("EAT_MSAL_SRC") ?? "";
     if (!string.IsNullOrWhiteSpace(envSrc)) sources.Add(envSrc.Trim());
-    sources.Add("./msal-browser.min.js"); // optional vendored copy next to index.html
-    sources.Add("https://alcdn.msauth.net/browser/2.30.0/js/msal-browser.min.js"); // Microsoft CDN
+    sources.Add("./msal-browser.min.js"); // vendored copy next to index.html (see README)
     return Results.Json(new
     {
         clientId = (Environment.GetEnvironmentVariable("EAT_CLIENT_ID") ?? "").Trim(),
