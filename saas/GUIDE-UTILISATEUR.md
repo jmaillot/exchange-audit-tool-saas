@@ -5,7 +5,7 @@
 1. Ouvrez l'application et allez sur **Connection**.
 2. Tapez votre **adresse e-mail professionnelle** (UPN, ex. `vous@contoso.onmicrosoft.com`).
 3. **Première fois dans votre organisation ?** Cliquez le lien **Register this tenant** dans le bandeau bleu (un administrateur doit valider, une seule fois par tenant), puis revenez ici.
-4. Cliquez **Connect with Microsoft** et connectez-vous avec un compte lecteur Exchange (ex. rôle *View-Only Organization Management*).
+4. Cliquez **Se connecter avec Microsoft** et connectez-vous avec un compte lecteur Exchange (ex. rôle *View-Only Organization Management*).
 5. Le bandeau en haut passe au vert. Le jeton d'accès reste **en mémoire uniquement** : **Disconnect** le jette.
 
 ## 2. Lancer un audit
