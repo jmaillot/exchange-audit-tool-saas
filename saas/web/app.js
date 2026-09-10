@@ -192,8 +192,30 @@ async function runAudit() {
   state.jobId = j.jobId;
   state.jobSection = state.current.id;
   state.jobStart = Date.now();
+  persistJob();
   log("Job " + j.jobId + " started.");
   pollStart();
+}
+function persistJob() {
+  // Job tracking only (no token): survives a page reload, dies with the tab.
+  try { sessionStorage.setItem("eat.lastJob", JSON.stringify({ jobId: state.jobId, section: state.jobSection, start: state.jobStart, org: state.org })); } catch (e) {}
+}
+async function restoreJob() {
+  let saved = null;
+  try { saved = JSON.parse(sessionStorage.getItem("eat.lastJob") || "null"); } catch (e) {}
+  if (!saved || !saved.jobId || !saved.section) return;
+  state.jobId = saved.jobId; state.jobSection = saved.section; state.jobStart = saved.start || Date.now();
+  state.org = saved.org || ""; if (state.org && !$("org").value) $("org").value = state.org;
+  try {
+    const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
+    if (!r.ok) throw new Error("gone");
+    const j = await r.json();
+    if (j.status === "running" || j.status === "queued") openSection(state.jobSection);
+    // Finished jobs: stay on Connection; reopening their section restores the view.
+  } catch (e) {
+    state.jobId = null; state.jobSection = null;
+    try { sessionStorage.removeItem("eat.lastJob"); } catch (e2) {}
+  }
 }
 function fmtElapsed(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
@@ -202,6 +224,13 @@ function fmtElapsed(ms) {
 }
 async function fetchJobStatus() {
   const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
+  if (!r.ok) {
+    pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
+    $("resultInfo").textContent = `Job ${state.jobId} no longer known by the API (restarted?).`;
+    state.jobId = null; state.jobSection = null;
+    try { sessionStorage.removeItem("eat.lastJob"); } catch (e) {}
+    return;
+  }
   const j = await r.json();
   const elapsed = state.jobStart ? fmtElapsed(Date.now() - state.jobStart) : "--:--:--";
   const active = j.status === "running" || j.status === "queued";
@@ -370,5 +399,5 @@ $("topSearch").onkeydown = e => {
   }
 };
 
-loadSections().catch(e => { log("API unreachable: " + e.message); $("coverage").textContent = "API unreachable."; });
+loadSections().then(restoreJob).catch(e => { log("API unreachable: " + e.message); $("coverage").textContent = "API unreachable."; });
 updateRegisterLink();
