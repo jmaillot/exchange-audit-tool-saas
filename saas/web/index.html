@@ -62,6 +62,8 @@
         <span class="spacer"></span>
         <input id="filter" type="search" placeholder="Filter options" aria-label="Filter options">
         <button id="selectAll" class="btn">Select all</button>
+        <button id="dlCsv" class="btn" disabled>Download CSV</button>
+        <button id="dlXlsx" class="btn" disabled>Download XLSX</button>
       </div>
       <div class="columns">
         <div class="left">
@@ -75,9 +77,6 @@
           <div class="card">
             <div class="row">
               <h2>Results preview</h2>
-              <span class="spacer"></span>
-              <button id="dlCsv" class="btn" disabled>Download CSV</button>
-              <button id="dlXlsx" class="btn" disabled>Download XLSX</button>
             </div>
             <div id="resultInfo" class="muted">No results yet.</div>
             <div class="grid-wrap"><table id="grid" aria-label="Results"></table></div>
