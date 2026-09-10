@@ -50,7 +50,7 @@ en: {
 fr: {
   searchSections: "Rechercher des sections", menuAria: "Menu", accountAria: "Compte", navAria: "Navigation",
   navConnection: "Connexion", navMonitor: "Supervision", navActivity: "Journal d'activité",
-  groupSys: "Connexion & Supervision",
+  groupSys: "Connexion & Monitor",
   crumbConnectionHome: "Connexion &gt; Exchange Audit",
   noticeHtml: `<strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a> (admin, une seule fois par tenant) avant de vous connecter.`,
   connectTitle: "Se connecter avec Microsoft",
