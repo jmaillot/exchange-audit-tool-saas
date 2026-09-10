@@ -151,9 +151,7 @@ async function loadSections() {
 
 function setCat(block, open) {
   block.querySelector(".nav-items").style.display = open ? "" : "none";
-  const c = block.querySelector(".nav-cat");
-  c.setAttribute("aria-expanded", open ? "true" : "false");
-  c.querySelector(".caret").textContent = open ? "\u25BE" : "\u25B8";
+  block.querySelector(".nav-cat").setAttribute("aria-expanded", open ? "true" : "false");
 }
 function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
@@ -164,7 +162,6 @@ function renderNav() {
     block.className = "nav-block"; block.dataset.cat = cat;
     const t = document.createElement("button");
     t.className = "nav-cat";
-    t.innerHTML = `<span class="caret"></span>`;
     t.appendChild(document.createTextNode(cat + " "));
     const n = document.createElement("span");
     n.className = "nav-count"; n.textContent = cats[cat].length;
@@ -192,7 +189,10 @@ function renderCoverage() {
 function showView(v) {
   ["home", "section", "activity"].forEach(x => $("view-" + x).classList.toggle("hidden", x !== v));
   document.querySelectorAll(".nav-item").forEach(b => b.classList.toggle("active", b.dataset.view === v));
-  if (v !== "section") document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.remove("active"));
+  if (v !== "section") {
+    document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.remove("active"));
+    document.querySelectorAll("#navGroups .nav-block").forEach(b => b.classList.remove("open"));
+  }
 }
 
 function openSection(id) {
@@ -205,6 +205,7 @@ function openSection(id) {
   if (!resume) state.checks = {};
   showView("section");
   document.querySelectorAll("#navGroups .nav-item").forEach(b => b.classList.toggle("active", b.dataset.section === id));
+  document.querySelectorAll("#navGroups .nav-block").forEach(bl => bl.classList.toggle("open", bl.dataset.cat === s.category));
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
