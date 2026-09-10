@@ -1,6 +1,124 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null };
+const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null, connLabel: null };
+// UI chrome dictionary. Anything served by /api/sections (section/category/
+// group/option names, CSV columns) is NEVER translated on purpose.
+const I18N = {
+en: {
+  searchSections: "Search audit sections", menuAria: "Menu", accountAria: "Account", navAria: "Navigation",
+  navConnection: "Connection", navMonitor: "Monitor", navActivity: "Activity log",
+  crumbConnectionHome: "Connection &gt; Exchange Audit",
+  noticeHtml: `<strong>First time here?</strong> Enter your work email below, then click <a id="registerLink" href="#" target="_blank" rel="noopener">Register this tenant</a> (admin, once per tenant) before connecting.`,
+  connectTitle: "Connect with Microsoft",
+  connectDesc: "Enter your work email (UPN) and sign in at Microsoft with an Exchange reader account (e.g. View-Only Organization Management). The access token is kept in memory only and dropped on disconnect.",
+  labelUpn: "Work email (UPN)", labelOrg: "Tenant organization",
+  connectBtn: "Connect with Microsoft", disconnectBtn: "Disconnect & drop token",
+  coverageTitle: "Coverage (Exchange Online, {n} sections)",
+  crumbConnection: "Connection",
+  slowBadge: "Slow options selected - this run may take longer",
+  filterOptions: "Filter options",
+  selectAll: "Select all", deselectAll: "Deselect all", selectAllCount: "Select all ({on}/{total})",
+  dlCsv: "Download CSV", dlXlsx: "Download XLSX",
+  runAudit: "RUN AUDIT", cancelBtn: "Cancel",
+  resultsPreview: "Results preview", resultsTable: "Results", noResults: "No results yet.",
+  crumbActivity: "Connection &gt; Activity log", activityTitle: "Activity log",
+  connectedAs: "Connected: {label}", notConnected: "Not connected",
+  statusConnected: "Connected (token in memory only).", statusDisconnected: "Disconnected, token dropped.",
+  enterUpn: "Enter your work email (UPN).",
+  serverNotConfigured: "Server not configured: missing clientId (see .env EAT_CLIENT_ID).",
+  msalUnavailable: "Microsoft login unavailable — please contact your administrator.",
+  openingSignin: "Opening Microsoft sign-in...",
+  signedInLog: "Signed in as {upn} (tenant {org}). Token held in memory.",
+  signinFailed: "Sign-in failed: {err}", signinErrorLog: "Sign-in error: {err}", msalLoadLog: "MSAL load failed: {src}",
+  tokenRefreshedLog: "Token refreshed silently.", disconnectedLog: "Disconnected, token dropped.",
+  connectFirstAlert: "Connect first (Connection page).",
+  sessionExpired: "Session expired, please reconnect.", tokenRefreshFailedLog: "Token refresh failed: {err}",
+  queued: "Queued...", postError: "Error: {err}", postFailedLog: "FAILED: {body}", jobStartedLog: "Job {id} started.",
+  jobGone: "Job {id} no longer known by the API (restarted?).",
+  runningNote: "Running... {elapsed} (job {id}){err}", finishedNote: "Finished in {elapsed} (job {id}){err}",
+  previewLabel: "{cols} columns x {rows} rows (preview of first 200). ",
+  jobDoneLog: "Job {id} {status} in {elapsed}{cols}.", jobDoneCols: " ({n} columns)",
+  openFailedLog: "Failed to open section: {err}",
+  cancelLog: "Polling stopped (worker job continues to timeout).",
+  apiDownLog: "API unreachable: {err}", apiDownCoverage: "API unreachable.",
+  slowTag: "slow",
+  smartTitle: "Smart mode", smartHint: "Keeps only columns that have a value on at least one row.",
+  smartLabel: "Auto-detect populated properties only (recommended)",
+  sectionsLoadedLog: "Loaded {n} Exchange Online sections from API."
+},
+fr: {
+  searchSections: "Rechercher des sections", menuAria: "Menu", accountAria: "Compte", navAria: "Navigation",
+  navConnection: "Connexion", navMonitor: "Supervision", navActivity: "Journal d'activité",
+  crumbConnectionHome: "Connexion &gt; Exchange Audit",
+  noticeHtml: `<strong>Première visite ?</strong> Saisissez votre e-mail professionnel ci-dessous, puis cliquez <a id="registerLink" href="#" target="_blank" rel="noopener">Enregistrer ce tenant</a> (admin, une seule fois par tenant) avant de vous connecter.`,
+  connectTitle: "Se connecter avec Microsoft",
+  connectDesc: "Saisissez votre e-mail professionnel (UPN) et connectez-vous chez Microsoft avec un compte lecteur Exchange (ex. View-Only Organization Management). Le jeton d'accès est conservé en mémoire uniquement et supprimé à la déconnexion.",
+  labelUpn: "E-mail professionnel (UPN)", labelOrg: "Organisation du tenant",
+  connectBtn: "Se connecter avec Microsoft", disconnectBtn: "Se déconnecter",
+  coverageTitle: "Couverture (Exchange Online, {n} sections)",
+  crumbConnection: "Connexion",
+  slowBadge: "Options lentes sélectionnées — l'exécution sera bien plus longue",
+  filterOptions: "Filtrer les options",
+  selectAll: "Tout sélectionner", deselectAll: "Tout désélectionner", selectAllCount: "Tout sélectionner ({on}/{total})",
+  dlCsv: "Télécharger CSV", dlXlsx: "Télécharger XLSX",
+  runAudit: "LANCER L'AUDIT", cancelBtn: "Annuler",
+  resultsPreview: "Aperçu des résultats", resultsTable: "Résultats", noResults: "Aucun résultat pour l'instant.",
+  crumbActivity: "Connexion &gt; Journal d'activité", activityTitle: "Journal d'activité",
+  connectedAs: "Connecté : {label}", notConnected: "Non connecté",
+  statusConnected: "Connecté (jeton en mémoire uniquement).", statusDisconnected: "Déconnecté, jeton supprimé.",
+  enterUpn: "Saisissez votre e-mail professionnel (UPN).",
+  serverNotConfigured: "Serveur non configuré : clientId manquant (voir .env EAT_CLIENT_ID).",
+  msalUnavailable: "Connexion Microsoft indisponible — contactez votre administrateur.",
+  openingSignin: "Ouverture de la connexion Microsoft…",
+  signedInLog: "Connecté en tant que {upn} (tenant {org}). Jeton en mémoire.",
+  signinFailed: "Échec de connexion : {err}", signinErrorLog: "Erreur de connexion : {err}", msalLoadLog: "Chargement MSAL impossible : {src}",
+  tokenRefreshedLog: "Jeton actualisé silencieusement.", disconnectedLog: "Déconnecté, jeton supprimé.",
+  connectFirstAlert: "Connectez-vous d'abord (page Connexion).",
+  sessionExpired: "Session expirée, reconnectez-vous.", tokenRefreshFailedLog: "Échec d'actualisation du jeton : {err}",
+  queued: "En file d'attente…", postError: "Erreur : {err}", postFailedLog: "ÉCHEC : {body}", jobStartedLog: "Job {id} démarré.",
+  jobGone: "Job {id} inconnu de l'API (redémarrée ?).",
+  runningNote: "En cours… {elapsed} (job {id}){err}", finishedNote: "Terminé en {elapsed} (job {id}){err}",
+  previewLabel: "{cols} colonnes x {rows} lignes (aperçu des 200 premières). ",
+  jobDoneLog: "Job {id} {status} en {elapsed}{cols}.", jobDoneCols: " ({n} colonnes)",
+  openFailedLog: "Ouverture de la section impossible : {err}",
+  cancelLog: "Suivi arrêté (le job continue côté serveur jusqu'au timeout).",
+  apiDownLog: "API injoignable : {err}", apiDownCoverage: "API injoignable.",
+  slowTag: "lent",
+  smartTitle: "Mode intelligent", smartHint: "Ne garde que les colonnes ayant une valeur sur au moins une ligne.",
+  smartLabel: "Détection auto des propriétés remplies uniquement (recommandé)",
+  sectionsLoadedLog: "{n} sections Exchange Online chargées depuis l'API."
+}};
+let lang = "en";
+try { lang = localStorage.getItem("eat.lang") || ((navigator.language || "en").toLowerCase().startsWith("fr") ? "fr" : "en"); } catch (e) {}
+if (!I18N[lang]) lang = "en";
+function t(key, vars) {
+  let s = (I18N[lang] && I18N[lang][key]) ?? I18N.en[key] ?? key;
+  if (vars) for (const k in vars) s = s.split("{" + k + "}").join(vars[k]);
+  return s;
+}
+function refreshConnText() {
+  const label = state.connLabel ? t("connectedAs", { label: state.connLabel }) : t("notConnected");
+  $("connText").textContent = label; $("connDot").title = label;
+  $("connDot").classList.toggle("on", !!state.connLabel);
+}
+function applyI18n() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.textContent = t(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-ph]").forEach(el => { el.placeholder = t(el.dataset.i18nPh); el.setAttribute("aria-label", t(el.dataset.i18nPh)); });
+  document.querySelectorAll("[data-i18n-aria]").forEach(el => { el.setAttribute("aria-label", t(el.dataset.i18nAria)); });
+  document.querySelectorAll("[data-i18n-html]").forEach(el => { el.innerHTML = t(el.dataset.i18nHtml); });
+  const lb = $("langBtn");
+  if (lb) { lb.textContent = lang.toUpperCase(); lb.title = lang === "fr" ? "Switch to English" : "Passer en français"; }
+  refreshConnText();
+  updateRegisterLink();
+}
+function setLang(l) {
+  lang = I18N[l] ? l : "en";
+  try { localStorage.setItem("eat.lang", lang); } catch (e) {}
+  applyI18n();
+  renderCoverage();
+  if (state.current) { renderGroups($("filter").value); updateSlow(); }
+}
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
   { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"] },
@@ -28,7 +146,7 @@ async function loadSections() {
   if (!r.ok) throw new Error("API " + r.status);
   state.sections = await r.json();
   renderNav(); renderCoverage();
-  log(`${state.sections.length} sections Exchange Online chargées depuis l'API.`);
+  log(t("sectionsLoadedLog", { n: state.sections.length }));
 }
 
 function setCat(block, open) {
@@ -67,7 +185,7 @@ function renderNav() {
 }
 
 function renderCoverage() {
-  $("coverageTitle").textContent = `Couverture (Exchange Online, ${state.sections.length} sections)`;
+  $("coverageTitle").textContent = t("coverageTitle", { n: state.sections.length });
   $("coverage").innerHTML = state.sections.map(s => `<div>${esc(s.navTitle)}</div>`).join("");
 }
 
@@ -95,7 +213,7 @@ function openSection(id) {
   updateSlow();
   if (resume) { if (!state.poll) pollStart(); else fetchJobStatus(); }
   else { pollStop(); resetResults(); state.jobSection = null; state.jobStart = 0; }
-  } catch (e) { log("Ouverture de la section impossible : " + (e.message || e)); }
+  } catch (e) { log(t("openFailedLog", { err: e.message || e })); }
 }
 
 function renderGroups(filter) {
@@ -105,10 +223,12 @@ function renderGroups(filter) {
   // already define their own (key "auto") keep it; the flag is read in runAudit.
   const nativeSmart = state.current.groups.some(g => g.key === "auto" || (g.title || "").toLowerCase().includes("smart"));
   if (!nativeSmart) {
-    const label = "Détection auto des propriétés remplies uniquement (recommandé)";
-    if (!f || "mode intelligent".includes(f) || label.toLowerCase().includes(f)) {
+    const label = t("smartLabel");
+    const matchTests = ["smart mode", "mode intelligent", I18N.en.smartLabel.toLowerCase(), I18N.fr.smartLabel.toLowerCase()];
+    if (!f || matchTests.some(x => x.includes(f))) {
       const card = document.createElement("div"); card.className = "card grp";
-      card.innerHTML = `<h3>Mode intelligent</h3><div class="hint">Ne garde que les colonnes ayant une valeur sur au moins une ligne.</div>`;
+      const h = document.createElement("h3"); h.textContent = t("smartTitle"); card.appendChild(h);
+      const hint = document.createElement("div"); hint.className = "hint"; hint.textContent = t("smartHint"); card.appendChild(hint);
       const opts = document.createElement("div"); opts.className = "opts";
       const lbl = document.createElement("label"); lbl.className = "opt";
       const inp = document.createElement("input");
@@ -142,7 +262,7 @@ function renderGroups(filter) {
       };
       lbl.appendChild(inp);
       lbl.appendChild(document.createTextNode(o.label + " "));
-      if (o.slow || g.slow) { const em = document.createElement("span"); em.className = "slow"; em.textContent = "lent"; lbl.appendChild(em); }
+      if (o.slow || g.slow) { const em = document.createElement("span"); em.className = "slow"; em.textContent = t("slowTag"); lbl.appendChild(em); }
       opts.appendChild(lbl);
     });
     card.appendChild(opts); host.appendChild(card);
@@ -162,7 +282,7 @@ function updateSelectAll() {
     return o && o.label.toLowerCase().includes(($("filter").value || "").toLowerCase()) && g.mode !== "SingleChoice";
   });
   const on = keys.filter(k => state.checks[k]).length;
-  $("selectAll").textContent = keys.length && on === keys.length ? "Tout désélectionner" : `Tout sélectionner (${on}/${keys.length})`;
+  $("selectAll").textContent = keys.length && on === keys.length ? t("deselectAll") : t("selectAllCount", { on, total: keys.length });
 }
 function selection() {
   const sel = {};
@@ -172,29 +292,29 @@ function selection() {
   return sel;
 }
 function resetResults() {
-  $("grid").innerHTML = ""; $("resultInfo").textContent = "Aucun résultat pour l'instant.";
+  $("grid").innerHTML = ""; $("resultInfo").textContent = t("noResults");
   $("jobLog").textContent = ""; $("jobLog").classList.add("hidden");
   $("dlCsv").disabled = $("dlXlsx").disabled = true;
 }
 
 async function runAudit() {
-  if (!state.token || !state.org) { alert("Connectez-vous d'abord (page Connexion)."); showView("home"); return; }
-  try { await ensureToken(); } catch (e) { $("resultInfo").textContent = "Session expirée, reconnectez-vous."; log("Échec d'actualisation du jeton : " + (e.message || e)); return; }
+  if (!state.token || !state.org) { alert(t("connectFirstAlert")); showView("home"); return; }
+  try { await ensureToken(); } catch (e) { $("resultInfo").textContent = t("sessionExpired"); log(t("tokenRefreshFailedLog", { err: e.message || e })); return; }
   const sel = selection();
   const nativeAuto = state.current.groups.some(g => g.key === "auto");
   const smart = nativeAuto ? (sel.auto || []).includes("autodetect") : state.smartMode;
   const body = { sectionId: state.current.id, selection: sel, organization: state.org, includeXlsx: true, smartMode: smart };
   log(`RUN ${body.sectionId} selection=${JSON.stringify(body.selection)}`);
   $("runBtn").disabled = true; $("cancelBtn").disabled = false;
-  $("resultInfo").textContent = "En file d'attente…";
+  $("resultInfo").textContent = t("queued");
   const r = await fetch(API + "/api/jobs", { method: "POST", headers: authHeaders(), body: JSON.stringify(body) });
   const j = await r.json();
-  if (!r.ok) { $("resultInfo").textContent = "Erreur : " + (j.error || r.status); log("ÉCHEC : " + JSON.stringify(j)); $("runBtn").disabled = false; $("cancelBtn").disabled = true; return; }
+  if (!r.ok) { $("resultInfo").textContent = t("postError", { err: j.error || r.status }); log(t("postFailedLog", { body: JSON.stringify(j) })); $("runBtn").disabled = false; $("cancelBtn").disabled = true; return; }
   state.jobId = j.jobId;
   state.jobSection = state.current.id;
   state.jobStart = Date.now();
   persistJob();
-  log("Job " + j.jobId + " démarré.");
+  log(t("jobStartedLog", { id: j.jobId }));
   pollStart();
 }
 function persistJob() {
@@ -227,7 +347,7 @@ async function fetchJobStatus() {
   const r = await fetch(API + "/api/jobs/" + state.jobId, { headers: { "X-Tenant-Id": state.org } });
   if (!r.ok) {
     pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
-    $("resultInfo").textContent = `Job ${state.jobId} inconnu de l'API (redémarrée ?).`;
+    $("resultInfo").textContent = t("jobGone", { id: state.jobId });
     state.jobId = null; state.jobSection = null;
     try { sessionStorage.removeItem("eat.lastJob"); } catch (e) {}
     return;
@@ -235,14 +355,16 @@ async function fetchJobStatus() {
   const j = await r.json();
   const elapsed = state.jobStart ? fmtElapsed(Date.now() - state.jobStart) : "--:--:--";
   const active = j.status === "running" || j.status === "queued";
-  const note = `${active ? "En cours… " + elapsed : "Terminé en " + elapsed} (job ${state.jobId})${j.error ? " - " + j.error : ""}`;
+  const errSuffix = j.error ? " - " + j.error : "";
+  const note = active ? t("runningNote", { elapsed, id: state.jobId, err: errSuffix })
+                      : t("finishedNote", { elapsed, id: state.jobId, err: errSuffix });
   if (j.header) renderGrid(j.header, j.preview || [], note);
   else $("resultInfo").textContent = note;
   if (j.log) { $("jobLog").textContent = j.log.slice(-8000); $("jobLog").classList.remove("hidden"); }
   if (j.status === "succeeded" || j.status === "failed") {
     pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true;
     $("dlCsv").disabled = !j.hasCsv; $("dlXlsx").disabled = !j.hasXlsx;
-    log(`Job ${state.jobId} ${j.status} en ${elapsed}${j.header ? " (" + j.header.length + " colonnes)" : ""}.`);
+    log(t("jobDoneLog", { id: state.jobId, status: j.status, elapsed, cols: j.header ? t("jobDoneCols", { n: j.header.length }) : "" }));
   }
 }
 function pollStart() {
@@ -261,7 +383,7 @@ function renderGrid(header, rows, note) {
     r.forEach(c => { const td = document.createElement("td"); td.textContent = c ?? ""; td.title = c ?? ""; tr.appendChild(td); });
     t.appendChild(tr);
   });
-  $("resultInfo").textContent = `${header.length} colonnes x ${rows.length} lignes (aperçu des 200 premières). ` + (note || "");
+  $("resultInfo").textContent = t("previewLabel", { cols: header.length, rows: rows.length }) + (note || "");
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
@@ -278,17 +400,19 @@ $("selectAll").onclick = () => {
 };
 $("filter").oninput = e => renderGroups(e.target.value);
 $("runBtn").onclick = runAudit;
-$("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log("Suivi arrêté (le job continue côté serveur jusqu'au timeout)."); };
+$("cancelBtn").onclick = () => { pollStop(); $("runBtn").disabled = false; $("cancelBtn").disabled = true; log(t("cancelLog")); };
 $("crumbHome").onclick = e => { e.preventDefault(); showView("home"); };
 $("hamburger").onclick = () => $("sidenav").classList.toggle("hidden");
+$("langBtn").onclick = () => setLang(lang === "fr" ? "en" : "fr");
 function setConnected(label) {
-  $("connDot").classList.add("on"); $("connText").textContent = "Connecté : " + label;
-  $("homeStatus").textContent = "Connecté (jeton en mémoire uniquement).";
+  state.connLabel = label;
+  $("homeStatus").textContent = t("statusConnected");
+  refreshConnText();
 }
 function setDisconnected(msg) {
-  state.token = ""; state.tokenExp = 0; state.msalAccount = null; state.jobId = null; pollStop();
-  $("connDot").classList.remove("on"); $("connText").textContent = "Non connecté";
-  $("homeStatus").textContent = msg || "Déconnecté, jeton supprimé.";
+  state.token = ""; state.tokenExp = 0; state.msalAccount = null; state.jobId = null; state.connLabel = null; pollStop();
+  $("homeStatus").textContent = msg || t("statusDisconnected");
+  refreshConnText();
 }
 function upnDomain(upn) {
   const i = (upn || "").lastIndexOf("@");
@@ -320,23 +444,23 @@ $("org").oninput = updateRegisterLink;
 $("connectBtn").onclick = async () => {
   const upn = $("upn").value.trim();
   const domain = upnDomain(upn);
-  if (!upn || !domain) { $("homeStatus").textContent = "Saisissez votre e-mail professionnel (UPN)."; return; }
+  if (!upn || !domain) { $("homeStatus").textContent = t("enterUpn"); return; }
   if (!EAT_CFG.clientId || EAT_CFG.clientId.indexOf("PASTE") === 0) {
-    $("homeStatus").textContent = "Serveur non configuré : clientId manquant (voir .env EAT_CLIENT_ID).";
+    $("homeStatus").textContent = t("serverNotConfigured");
     return;
   }
   if (!window.msal) {
     for (const src of (EAT_CFG.msalSources || ["./msal-browser.min.js"])) {
       try { await loadScript(src); if (window.msal) break; }
-      catch (e) { log("Chargement MSAL impossible : " + src); }
+      catch (e) { log(t("msalLoadLog", { src })); }
     }
   }
   if (!window.msal) {
-    $("homeStatus").textContent = "Connexion Microsoft indisponible — contactez votre administrateur.";
+    $("homeStatus").textContent = t("msalUnavailable");
     return;
   }
   try {
-    $("homeStatus").textContent = "Ouverture de la connexion Microsoft…";
+    $("homeStatus").textContent = t("openingSignin");
     // Tokens cached in memory only (never localStorage/sessionStorage).
     const app = new window.msal.PublicClientApplication({
       auth: { clientId: EAT_CFG.clientId, authority: "https://login.microsoftonline.com/" + domain },
@@ -352,10 +476,10 @@ $("connectBtn").onclick = async () => {
     state.org = $("org").value.trim() || domain;
     $("org").value = state.org;
     setConnected(state.org + " (" + state.upn + ")");
-    log("Connecté en tant que " + state.upn + " (tenant " + state.org + "). Jeton en mémoire.");
+    log(t("signedInLog", { upn: state.upn, org: state.org }));
   } catch (e) {
-    $("homeStatus").textContent = "Échec de connexion : " + (e.message || e);
-    log("Erreur de connexion : " + (e.message || e));
+    $("homeStatus").textContent = t("signinFailed", { err: e.message || e });
+    log(t("signinErrorLog", { err: e.message || e }));
   }
 };
 async function ensureToken() {
@@ -366,13 +490,13 @@ async function ensureToken() {
     });
     state.token = tok.accessToken;
     state.tokenExp = (tok.expiresOn ? tok.expiresOn.getTime() : Date.now() + 50 * 60 * 1000);
-    log("Jeton actualisé silencieusement.");
+    log(t("tokenRefreshedLog"));
   }
 }
 $("disconnectBtn").onclick = () => {
   state.msal = null;
   setDisconnected();
-  log("Déconnecté, jeton supprimé.");
+  log(t("disconnectedLog"));
 };
 $("dlCsv").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=csv", "_blank");
 $("dlXlsx").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/download?format=xlsx", "_blank");
@@ -400,5 +524,6 @@ $("topSearch").onkeydown = e => {
   }
 };
 
-loadSections().then(restoreJob).catch(e => { log("API injoignable : " + e.message); $("coverage").textContent = "API injoignable."; });
+applyI18n();
+loadSections().then(restoreJob).catch(e => { log(t("apiDownLog", { err: e.message })); $("coverage").textContent = t("apiDownCoverage"); });
 updateRegisterLink();

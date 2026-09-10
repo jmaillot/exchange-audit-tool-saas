@@ -1,5 +1,7 @@
 # Guide utilisateur — Exchange Online Audit Tool
 
+L'interface est disponible en français et en anglais : bouton **FR/EN** en haut à droite (le choix est mémorisé). Les noms de propriétés Exchange restent toujours en anglais car ce sont les noms techniques (colonnes PowerShell/CSV).
+
 ## 1. Première connexion
 
 1. Ouvrez l'application et allez sur **Connection**.
