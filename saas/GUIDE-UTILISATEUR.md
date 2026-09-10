@@ -1,0 +1,27 @@
+# Guide utilisateur — Exchange Online Audit Tool
+
+## 1. Première connexion
+
+1. Ouvrez l'application et allez sur **Connection**.
+2. Tapez votre **adresse e-mail professionnelle** (UPN, ex. `vous@contoso.onmicrosoft.com`).
+3. **Première fois dans votre organisation ?** Cliquez le lien **Register this tenant** dans le bandeau bleu (un administrateur doit valider, une seule fois par tenant), puis revenez ici.
+4. Cliquez **Connect with Microsoft** et connectez-vous avec un compte lecteur Exchange (ex. rôle *View-Only Organization Management*).
+5. Le bandeau en haut passe au vert. Le jeton d'accès reste **en mémoire uniquement** : **Disconnect** le jette.
+
+## 2. Lancer un audit
+
+1. Dans le menu de gauche, ouvrez une catégorie puis une section (ex. *Mailboxes → User mailboxes*).
+2. Cochez les propriétés voulues (la case **Filtre** aide à les retrouver, **Select all** tout coche). Les options marquées **slow** interrogent chaque objet une par une : c'est beaucoup plus long, décochez-les pour un premier passage.
+3. Le bloc **Smart mode** (coché par défaut, recommandé) ne garde que les colonnes remplies sur au moins une ligne.
+4. Cliquez **RUN AUDIT**. La progression s'affiche dans *Results preview* (200 premières lignes).
+5. **Download CSV / Download XLSX** pour récupérer le fichier (`NomSection-date.csv`). Les colonnes supprimées par le Smart mode sont listées dans le journal sous le tableau.
+
+## 3. Problèmes fréquents
+
+| Symptôme | Solution |
+|---|---|
+| `Sign-in failed` à la connexion | Le tenant n'est pas enregistré : passez par **Register this tenant** (admin), puis reconnectez-vous. |
+| Job `failed - worker 500: UnAuthorized` | Consentement admin manquant **ou** compte sans rôle lecteur Exchange. Refaites le consentement, **Disconnect + Connect** (le jeton doit être réémis), relancez. |
+| Cases à cocher invisibles après une mise à jour | **Ctrl+F5** (refresh forcé) une fois. |
+| `Session expired` au lancement | Reconnectez-vous (le jeton a expiré). |
+| Audit très long | Décochez les options **slow**, ou limitez avec **Result size: First 1000**. |

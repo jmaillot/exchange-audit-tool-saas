@@ -61,14 +61,13 @@ function renderNav() {
     });
     t.onclick = () => setCat(block, wrap.style.display === "none");
     block.appendChild(t); block.appendChild(wrap); host.appendChild(block);
-    setCat(block, cat === "Mailboxes");
+    setCat(block, false);
   });
   document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 }
 
 function renderCoverage() {
-  $("coverage").innerHTML = state.sections.map(s =>
-    `<div><b>${esc(s.navTitle)}</b> <span class="muted">(${esc(s.id)}, ${esc(s.scope)})</span></div>`).join("");
+  $("coverage").innerHTML = state.sections.map(s => `<div>${esc(s.navTitle)}</div>`).join("");
 }
 
 function showView(v) {
@@ -287,8 +286,7 @@ $("connectBtn").onclick = async () => {
     }
   }
   if (!window.msal) {
-    $("homeStatus").textContent = "Microsoft login library missing — use Advanced token paste below.";
-    $("manualBox").open = true;
+    $("homeStatus").textContent = "Microsoft login unavailable — please contact your administrator.";
     return;
   }
   try {
@@ -325,16 +323,7 @@ async function ensureToken() {
     log("Token refreshed silently.");
   }
 }
-$("manualBtn").onclick = () => {
-  state.msal = null; state.msalAccount = null;
-  state.token = $("token").value.trim(); state.org = $("org").value.trim();
-  if (!state.token || !state.org) { $("homeStatus").textContent = "Enter token and tenant organization."; return; }
-  state.tokenExp = Date.now() + 50 * 60 * 1000;
-  setConnected(state.org);
-  log("Connected to tenant " + state.org + " (manual token). Token held in memory.");
-};
 $("disconnectBtn").onclick = () => {
-  if ($("token")) $("token").value = "";
   state.msal = null;
   setDisconnected();
   log("Disconnected, token dropped.");
@@ -355,7 +344,7 @@ $("topSearch").oninput = e => {
       if (show) vis++;
     });
     block.style.display = (vis || !q) ? "" : "none";
-    setCat(block, q ? vis > 0 : block.dataset.cat === "Mailboxes");
+    setCat(block, q ? vis > 0 : false);
   });
 };
 $("topSearch").onkeydown = e => {
