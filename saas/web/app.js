@@ -20,7 +20,7 @@ en: {
   crumbConnection: "Connection",
   slowBadge: "Slow options selected - this run may take longer",
   filterOptions: "Filter options",
-  selectAll: "Select all", deselectAll: "Deselect all", selectAllCount: "Select all ({on}/{total})",
+  selectAll: "Select all", deselectAll: "Deselect all", selectAllCount: "Select all ({on}/{total})", deselectSlow: "Deselect slow",
   dlCsv: "Download CSV", dlXlsx: "Download XLSX",
   runAudit: "RUN AUDIT", cancelBtn: "Cancel",
   resultsPreview: "Results preview", resultsTable: "Results", noResults: "No results yet.",
@@ -65,7 +65,7 @@ fr: {
   crumbConnection: "Connexion",
   slowBadge: "Options lentes sélectionnées — l'exécution sera bien plus longue",
   filterOptions: "Filtrer les options",
-  selectAll: "Tout sélectionner", deselectAll: "Tout désélectionner", selectAllCount: "Tout sélectionner ({on}/{total})",
+  selectAll: "Tout sélectionner", deselectAll: "Tout désélectionner", selectAllCount: "Tout sélectionner ({on}/{total})", deselectSlow: "Décocher lentes",
   dlCsv: "Télécharger CSV", dlXlsx: "Télécharger XLSX",
   runAudit: "LANCER L'AUDIT", cancelBtn: "Annuler",
   resultsPreview: "Aperçu des résultats", resultsTable: "Résultats", noResults: "Aucun résultat pour l'instant.",
@@ -451,9 +451,15 @@ function applyViewDefaults() {
   });
   return true;
 }
+function sectionHasSlow() {
+  return state.current && state.current.groups.some(g => g.slow || (g.options || []).some(o => o.slow));
+}
 function updateSlow() {
   const slow = state.current.groups.some(g => (g.options || []).some(o => (o.slow || g.slow) && state.checks[g.key + "::" + o.value]));
   $("slowBadge").classList.toggle("hidden", !slow);
+  // One-click fast pass: visible only in sections that define slow options.
+  $("deselectSlow").textContent = t("deselectSlow");
+  $("deselectSlow").classList.toggle("hidden", !sectionHasSlow());
 }
 function updateSelectAll() {
   const keys = Object.keys(state.checks).filter(k => {
@@ -573,6 +579,14 @@ function renderGrid(header, rows, note) {
 }
 function esc(s) { return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
+$("deselectSlow").onclick = () => {
+  if (!state.current) return;
+  state.current.groups.forEach(g => {
+    if (g.mode === "SingleChoice") return;
+    (g.options || []).forEach(o => { if (o.slow || g.slow) state.checks[g.key + "::" + o.value] = false; });
+  });
+  renderGroups($("filter").value); updateSlow();
+};
 $("selectAll").onclick = () => {
   const f = ($("filter").value || "").toLowerCase();
   const keys = [];
