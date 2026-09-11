@@ -165,7 +165,7 @@ function setLang(l) {
 }
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
-  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"], graphScopes: ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All", "SharePointTenantSettings.Read.All"] },
+  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"], graphScopes: ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All", "SharePointTenantSettings.Read.All", "AuditLog.Read.All", "UserAuthenticationMethod.Read.All", "RoleManagement.Read.Directory"] },
   window.EAT_CONFIG || {});
 fetch("api/config").then(r => r.json()).then(c => {
   if (c.clientId) EAT_CFG.clientId = c.clientId;
@@ -360,6 +360,8 @@ function openSection(id) {
   $("crumbSection").textContent = s.navTitle;
   $("secTitle").textContent = s.title;
   $("secSub").textContent = s.subtitle || "";
+  if (s.tipHtml) { $("secTip").innerHTML = s.tipHtml; $("secTip").classList.remove("hidden"); }
+  else { $("secTip").innerHTML = ""; $("secTip").classList.add("hidden"); }
   $("filter").value = "";
   renderGroups("");
   // Fresh open (not a job resume): sections with per-view defaults start on
@@ -765,7 +767,7 @@ async function ensureGraphToken(silentOnly) {
   // silent so Exchange polling never pops a window.
   if (!state.msal || !state.msalAccount) return;
   if (state.graphToken && Date.now() < state.graphTokenExp - 5 * 60 * 1000) return;
-  const scopes = EAT_CFG.graphScopes || ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All", "SharePointTenantSettings.Read.All"];
+  const scopes = EAT_CFG.graphScopes || ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All", "SharePointTenantSettings.Read.All", "AuditLog.Read.All", "UserAuthenticationMethod.Read.All", "RoleManagement.Read.Directory"];
   try {
     const tok = await state.msal.acquireTokenSilent({ scopes, account: state.msalAccount });
     state.graphToken = tok.accessToken;

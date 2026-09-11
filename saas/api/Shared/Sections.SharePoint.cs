@@ -87,12 +87,13 @@ namespace ExchangeAuditTool
                 "sharepoint-sites",
                 "Site Collections",
                 "SharePoint site collections export",
-                "Audit group-connected site collections via Graph (one row per site) + usage-report enrichment where matchable. Non-group sites (communication/classic) need sp-migration/Get-SPOSiteInventory.ps1.",
+                "Audit group-connected site collections via Graph (one row per site) plus private/shared channel sites (separate collections, not subsites) + usage-report enrichment where matchable.",
                 "site",
                 AuditScope.Graph);
             section.Category = "SharePoint";
             section.Product = "SharePoint";
             section.DefaultFileName = "SharePointSites.csv";
+            section.TipHtml = "Non-group sites (communication/classic) need the standalone admin scripts: <a href='https://github.com/jmaillot/exchange-audit-tool-saas/tree/main/sp-migration' target='_blank' rel='noopener'>sp-migration on GitHub</a>.";
 
             var site = new AuditOptionGroup("site", "Site columns", GroupMode.MultiCheck); site.Columns = 2;
             site.AddProp("SiteId", true);
@@ -203,6 +204,51 @@ namespace ExchangeAuditTool
                 sb.AppendLine("        MigrationWave = ''; MigrationDecision = ''");
                 sb.AppendLine("    })");
                 sb.AppendLine("}");
+                sb.AppendLine("$chanFail = 0");
+                sb.AppendLine("foreach ($g in $groups) {");
+                sb.AppendLine("    if (@($g.resourceProvisioningOptions) -notcontains 'Team') { continue }");
+                sb.AppendLine("    $gid = [string]$g.id");
+                sb.AppendLine("    $channels = @()");
+                sb.AppendLine("    try {");
+                sb.AppendLine("        $curi = \"https://graph.microsoft.com/v1.0/teams/\" + $gid + \"/channels\"");
+                sb.AppendLine("        while ($curi) { $cr = Invoke-RestMethod -Uri $curi -Headers $headers -Method Get -ErrorAction Stop; $channels += @($cr.value); $curi = $cr.'@odata.nextLink' }");
+                sb.AppendLine("    } catch { $chanFail++; continue }");
+                sb.AppendLine("    foreach ($c in $channels) {");
+                sb.AppendLine("        $mt = [string]$c.membershipType; if ($mt -eq 'unknownFutureValue') { $mt = 'shared' }");
+                sb.AppendLine("        if ($mt -eq 'standard' -or $mt -eq '') { continue }");
+                sb.AppendLine("        $csu = ''; $cti = ''; $ccd = ''; $clm = ''; $csumb = ''; $csqmb = ''; $ctpl = ''; $cstat = 'Active'");
+                sb.AppendLine("        try {");
+                sb.AppendLine("            $cid = [string]$c.id");
+                sb.AppendLine("            $ff = Invoke-RestMethod -Uri (\"https://graph.microsoft.com/v1.0/teams/\" + $gid + \"/channels/\" + $cid + \"/filesFolder\") -Headers $headers -Method Get -ErrorAction Stop");
+                sb.AppendLine("            $csid = ''; if ($ff.parentReference -and $ff.parentReference.siteId) { $csid = [string]$ff.parentReference.siteId }");
+                sb.AppendLine("            if (-not $csid) { continue }");
+                sb.AppendLine("            $cs = Invoke-RestMethod -Uri (\"https://graph.microsoft.com/v1.0/sites/\" + $csid) -Headers $headers -Method Get -ErrorAction Stop");
+                sb.AppendLine("            if ($cs.webUrl) { $csu = [string]$cs.webUrl }");
+                sb.AppendLine("            $cti = [string]$cs.displayName; $ccd = [string]$cs.createdDateTime; $clm = [string]$cs.lastModifiedDateTime");
+                sb.AppendLine("            try {");
+                sb.AppendLine("                $cdr = Invoke-RestMethod -Uri (\"https://graph.microsoft.com/v1.0/sites/\" + $csid + \"/drive?`$select=quota\") -Headers $headers -Method Get -ErrorAction Stop");
+                sb.AppendLine("                if ($cdr.quota) {");
+                sb.AppendLine("                    try { if ($null -ne $cdr.quota.used) { $csumb = [math]::Round([double]$cdr.quota.used / 1MB, 2) } } catch { }");
+                sb.AppendLine("                    try { if ($null -ne $cdr.quota.total) { $csqmb = [math]::Round([double]$cdr.quota.total / 1MB, 2) } } catch { }");
+                sb.AppendLine("                }");
+                sb.AppendLine("            } catch { }");
+                if (wantReport)
+                {
+                    sb.AppendLine("            $rm2 = $null");
+                    sb.AppendLine("            $ck2 = $csid.Trim().ToLower(); if ($ck2 -and $repById.ContainsKey($ck2)) { $rm2 = $repById[$ck2] }");
+                    sb.AppendLine("            if ($rm2) { $ctpl = Get-Col $rm2 'Root Web Template'; if ((Get-Col $rm2 'Is Deleted') -eq 'True') { $cstat = 'Deleted' } }");
+                }
+                sb.AppendLine("            $rows.Add([pscustomobject]@{");
+                sb.AppendLine("                SiteId = $csid; Url = $csu; Title = $cti; Template = $ctpl; GroupId = $gid;");
+                sb.AppendLine("                PrimaryOwner = ''; Owners = ''; IsTeamsConnected = 'Yes'; SensitivityLabelId = '';");
+                sb.AppendLine("                StorageUsedMB = $csumb; StorageQuotaMB = $csqmb;");
+                sb.AppendLine("                CreatedDate = $ccd; LastContentModifiedDate = $clm; Status = $cstat;");
+                sb.AppendLine("                MigrationWave = ''; MigrationDecision = ''");
+                sb.AppendLine("            })");
+                sb.AppendLine("        } catch { $chanFail++ }");
+                sb.AppendLine("    }");
+                sb.AppendLine("}");
+                sb.AppendLine("if ($chanFail -gt 0) { Write-Host (\"WARNING: {0} channel site querie(s) failed.\" -f $chanFail) }");
                 sb.AppendLine("$rows = $rows | Select-Object " + selectList);
                 sb.AppendLine();
                 sb.Append(ctx.ExportCsv("$rows"));
@@ -220,12 +266,13 @@ namespace ExchangeAuditTool
                 "sharepoint-subsites",
                 "Subsites",
                 "SharePoint subsites export",
-                "Audit webs below group-connected sites via Graph: one row per web (root webs excluded). Other sites + web-level config (template, language, unique permissions) need sp-migration/.",
+                "Audit webs below group-connected sites via Graph: one row per web (root webs excluded). Non-group sites are not covered.",
                 "site",
                 AuditScope.Graph);
             section.Category = "SharePoint";
             section.Product = "SharePoint";
             section.DefaultFileName = "SharePointSubsites.csv";
+            section.TipHtml = "Web-level config (template, language, unique permissions, navigation…) needs the standalone admin scripts: <a href='https://github.com/jmaillot/exchange-audit-tool-saas/tree/main/sp-migration' target='_blank' rel='noopener'>sp-migration on GitHub</a>.";
 
             var sub = new AuditOptionGroup("subsite", "Subsite columns", GroupMode.MultiCheck); sub.Columns = 2;
             sub.AddProp("SiteId", true);
@@ -317,12 +364,13 @@ namespace ExchangeAuditTool
                 "sharepoint-sharing",
                 "Sharing Policy",
                 "SharePoint sharing policy export",
-                "Audit tenant sharing settings via Graph: one row. Needs the SharePoint Administrator or Global Reader role; remaining Get-SPOTenant settings are covered by sp-migration/Get-SPOTenantSharing.ps1.",
+                "Audit tenant sharing settings via Graph: one row. Needs the SharePoint Administrator or Global Reader role.",
                 "shield",
                 AuditScope.Graph);
             section.Category = "SharePoint";
             section.Product = "SharePoint";
             section.DefaultFileName = "SharePointSharing.csv";
+            section.TipHtml = "Remaining Get-SPOTenant settings (link defaults, expirations, attestation…) need the standalone script: <a href='https://github.com/jmaillot/exchange-audit-tool-saas/tree/main/sp-migration' target='_blank' rel='noopener'>sp-migration on GitHub</a>.";
 
             var tenant = new AuditOptionGroup("tenant", "Tenant", GroupMode.MultiCheck); tenant.Columns = 1;
             tenant.AddProp("TenantName", true);

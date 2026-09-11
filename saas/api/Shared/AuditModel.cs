@@ -133,6 +133,9 @@ namespace ExchangeAuditTool
         public Dictionary<string, List<string>> ViewDefaults = new Dictionary<string, List<string>>();
         public List<AuditOptionGroup> Groups = new List<AuditOptionGroup>();
         public AuditScriptBuilder BuildScript;
+        // Optional tip box rendered under the section description (raw HTML,
+        // e.g. a link to companion scripts). Empty = no tip box.
+        public string TipHtml = "";
         public string DefaultFileName = "audit.csv";
         public bool ScopeAwareDefaults = false;
 
@@ -170,6 +173,7 @@ namespace ExchangeAuditTool
             SectionsLicenses.Register();
             SectionsTeams.Register();
             SectionsSharePoint.Register();
+            SectionsEntraID.Register();
             // Product drives the web product tabs + left-nav filter. New
             // products (Teams, SharePoint…) just set section.Product explicitly;
             // everything else falls back here so old sections keep working.
