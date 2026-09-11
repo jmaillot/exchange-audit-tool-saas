@@ -43,3 +43,20 @@ Tous les CSV sont `;`-délimités, UTF-8 — même convention que l'outil SaaS.
 Astuce : la colonne vide `MigrationWave` du CSV SaaS est faite pour être
 remplie dans Excel, puis utilisée pour filtrer les vagues avant l'étape 2
 (`Where-Object { $_.MigrationWave -eq '1' }`).
+
+## Stratégie de partage tenant (complément de la section SaaS)
+
+La section SaaS **Sharing Policy** couvre via Graph : TenantName,
+SharingCapability, RequireAcceptingAccountMatchInvitedAccount,
+SharingDomainRestrictionMode, SharingAllowedDomainList,
+SharingBlockedDomainList. Tout le reste de `Get-SPOTenant` n'existe pas en
+Graph :
+
+```powershell
+.\Get-SPOTenantSharing.ps1 -AdminUrl https://TENANT-admin.sharepoint.com -OutDir .\out
+# -> Tenant-Sharing.csv (une ligne : DefaultSharingLinkType,
+#    DefaultLinkPermission, fenêtres d'expiration Anyone/Organization,
+#    EmailAttestation*, BccExternalSharing*, OneDriveForGuestsEnabled,
+#    ODBMembersCanShare, ODBAccessRequests,
+#    ShowPeoplePickerSuggestionsForGuestUsers, ...)
+```

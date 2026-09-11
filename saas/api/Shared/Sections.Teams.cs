@@ -757,13 +757,31 @@ namespace ExchangeAuditTool
                 sb.AppendLine("Write-Host (\"Retrieved {0} team(s).\" -f $groups.Count)");
                 if (wantReport)
                 {
+                    sb.AppendLine("function Get-Col($o, $name) {");
+                    sb.AppendLine("    foreach ($p in @($o.PSObject.Properties)) { if ([string]$p.Name -eq $name) { return ([string]$p.Value).Trim() } }");
+                    sb.AppendLine("    foreach ($p in @($o.PSObject.Properties)) { if (([string]$p.Name).Trim().Trim([char]0xFEFF).ToLower() -eq ([string]$name).ToLower()) { return ([string]$p.Value).Trim() } }");
+                    sb.AppendLine("    return ''");
+                    sb.AppendLine("}");
                     sb.AppendLine("$repById = @{}; $repByUrl = @{}");
                     sb.AppendLine("try {");
                     sb.AppendLine("    $repRaw = Invoke-WebRequest -Uri \"https://graph.microsoft.com/v1.0/reports/getSharePointSiteUsageDetail(period='D30')\" -Headers $headers -Method Get -UseBasicParsing -ErrorAction Stop");
-                    sb.AppendLine("    $repRows = @(($repRaw.Content -split \"`n\" | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }) | ConvertFrom-Csv)");
+                    sb.AppendLine("    $repTmp = [System.IO.Path]::GetTempFileName()");
+                    sb.AppendLine("    if ($repRaw.Content -is [string] -and ([string]$repRaw.Content).Length -gt 0) {");
+                    sb.AppendLine("        [System.IO.File]::WriteAllText($repTmp, [string]$repRaw.Content)");
+                    sb.AppendLine("    } else {");
+                    sb.AppendLine("        $rs = $repRaw.RawContentStream");
+                    sb.AppendLine("        $rs.Seek(0, [System.IO.SeekOrigin]::Begin) | Out-Null");
+                    sb.AppendLine("        $fs = [System.IO.File]::Create($repTmp)");
+                    sb.AppendLine("        try { $rs.CopyTo($fs) } finally { $fs.Dispose() }");
+                    sb.AppendLine("    }");
+                    sb.AppendLine("    Write-Host (\"Report download: HTTP {0}.\" -f [int]$repRaw.StatusCode)");
+                    sb.AppendLine("    $repHead = ((Get-Content -LiteralPath $repTmp -TotalCount 2) -join '|')");
+                    sb.AppendLine("    Write-Host (\"Report head: \" + $repHead.Substring(0, [Math]::Min(300, $repHead.Length)))");
+                    sb.AppendLine("    $repRows = @(Import-Csv -LiteralPath $repTmp)");
+                    sb.AppendLine("    Remove-Item -LiteralPath $repTmp -Force -ErrorAction SilentlyContinue");
                     sb.AppendLine("    foreach ($rr in $repRows) {");
-                    sb.AppendLine("        $ik = ([string]$rr.'Site Id').Trim().ToLower(); if ($ik -and -not $repById.ContainsKey($ik)) { $repById[$ik] = $rr }");
-                    sb.AppendLine("        $uk = ([string]$rr.'Site URL').Trim().TrimEnd('/').ToLower(); if ($uk -and -not $repByUrl.ContainsKey($uk)) { $repByUrl[$uk] = $rr }");
+                    sb.AppendLine("        $ik = (Get-Col $rr 'Site Id').ToLower(); if ($ik -and -not $repById.ContainsKey($ik)) { $repById[$ik] = $rr }");
+                    sb.AppendLine("        $uk = (Get-Col $rr 'Site URL').TrimEnd('/').ToLower(); if ($uk -and -not $repByUrl.ContainsKey($uk)) { $repByUrl[$uk] = $rr }");
                     sb.AppendLine("    }");
                     sb.AppendLine("    Write-Host (\"Loaded SharePoint usage report ({0} rows).\" -f $repRows.Count)");
                     sb.AppendLine("} catch { Write-Host (\"WARNING: SharePoint usage report failed (consent for Reports.Read.All?) - Template/FileCount will be blank: \" + $_.Exception.Message) }");
@@ -789,7 +807,7 @@ namespace ExchangeAuditTool
                     sb.AppendLine("        $ukey = ([string]$st.webUrl).Trim().TrimEnd('/').ToLower()");
                     sb.AppendLine("        if ($ukey -and $repByUrl.ContainsKey($ukey)) { $rm = $repByUrl[$ukey] }");
                     sb.AppendLine("        else { $tRaw = [string]$st.id; if ($tRaw -match ',') { $ik2 = ($tRaw.Split(',')[1]).Trim().ToLower(); if ($repById.ContainsKey($ik2)) { $rm = $repById[$ik2] } } }");
-                    sb.AppendLine("        if ($rm) { $tpl = [string]$rm.'Root Web Template'; $fc = [string]$rm.'File Count' }");
+                    sb.AppendLine("        if ($rm) { $tpl = Get-Col $rm 'Root Web Template'; $fc = Get-Col $rm 'File Count' }");
                 }
                 sb.AppendLine("    }");
                 sb.AppendLine("    $rows.Add([pscustomobject]@{");

@@ -32,7 +32,7 @@ app.MapGet("/api/health", () => Results.Json(new { ok = true, sections = onlineS
 app.MapGet("/api/config", () =>
 {
     string scopes = Environment.GetEnvironmentVariable("EAT_EXO_SCOPES") ?? "https://outlook.office365.com/.default";
-    string gscopes = Environment.GetEnvironmentVariable("EAT_GRAPH_SCOPES") ?? "User.Read.All Organization.Read.All Group.Read.All Team.ReadBasic.All Channel.ReadBasic.All TeamMember.Read.All ChannelMember.Read.All TeamsAppInstallation.ReadForTeam TeamsTab.Read.All Reports.Read.All ChannelMessage.Read.All Sites.Read.All";
+    string gscopes = Environment.GetEnvironmentVariable("EAT_GRAPH_SCOPES") ?? "User.Read.All Organization.Read.All Group.Read.All Team.ReadBasic.All Channel.ReadBasic.All TeamMember.Read.All ChannelMember.Read.All TeamsAppInstallation.ReadForTeam TeamsTab.Read.All Reports.Read.All ChannelMessage.Read.All Sites.Read.All SharePointTenantSettings.Read.All";
     var sources = new List<string>();
     string envSrc = Environment.GetEnvironmentVariable("EAT_MSAL_SRC") ?? "";
     if (!string.IsNullOrWhiteSpace(envSrc)) sources.Add(envSrc.Trim());

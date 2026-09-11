@@ -55,7 +55,7 @@ input[type=text],input:not([type]),input[type=search],input[type=password]{width
 @media(max-width:1100px){.columns{grid-template-columns:1fr}}
 .grp{margin-bottom:10px}
 .grp h3{font-size:13px;margin:0 0 6px}
-.grp .hint{font-size:12px;color:var(--muted);margin-bottom:6px}
+.grp .hint{font-size:12px;color:#0b5cab;background:#e8f3fc;border-left:4px solid var(--blue);border-radius:2px;padding:8px 10px;margin-bottom:8px}
 .opts{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}
 .opt{display:flex;gap:6px;align-items:flex-start;font-size:13px;padding:3px 0;min-width:0;overflow-wrap:anywhere}
 .opt input{flex-shrink:0;margin-top:2px}
