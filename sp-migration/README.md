@@ -14,6 +14,8 @@ Management Shell ou PnP PowerShell se fait ici, depuis un poste admin.
 | LockState, SharingCapability, quotas admin, propriétaire SPO déclaratif, sites supprimés | — | ✅ `Get-SPOSiteInventory.ps1` |
 | Sous-sites : IDs/URL/titres/dates | ✅ | — |
 | Sous-sites : WebTemplate/Configuration/Language, permissions uniques, navigation, groupes/membres, features, pages modernes, WebParts, listes/champs/types de contenu, paramètres régionaux | — | ✅ `Get-PnPWebInventory.ps1` |
+| Stratégie de partage tenant : TenantName, SharingCapability, RequireAcceptingAccountMatchInvitedAccount, SharingDomainRestrictionMode, Allowed/BlockedDomainList | ✅ | — |
+| Stratégie de partage tenant : reste de `Get-SPOTenant` (DefaultSharingLinkType/Permission, expirations Anyone/Organization, EmailAttestation*, BccExternalSharing*, OneDriveForGuestsEnabled, ODBMembersCanShare, ODBAccessRequests, PeoplePicker guest suggestions…) | — | ✅ `Get-SPOTenantSharing.ps1` |
 
 Tous les CSV sont `;`-délimités, UTF-8 — même convention que l'outil SaaS.
 
