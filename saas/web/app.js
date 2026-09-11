@@ -1,6 +1,6 @@
 /* Exchange Audit SaaS - Azure Portal style blade. No build step. */
 const API = "";
-const state = { sections: [], current: null, checks: {}, smartMode: true, token: "", tokenExp: 0, graphToken: "", graphTokenExp: 0, restoring: false, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null, connLabel: null };
+const state = { sections: [], current: null, activeProduct: "", checks: {}, smartMode: true, token: "", tokenExp: 0, graphToken: "", graphTokenExp: 0, restoring: false, org: "", upn: "", jobId: null, jobSection: null, jobStart: 0, poll: null, msal: null, msalAccount: null, connLabel: null };
 // UI chrome dictionary. Anything served by /api/sections (section/category/
 // group/option names, CSV columns) is NEVER translated on purpose.
 const I18N = {
@@ -140,12 +140,23 @@ function applyI18n() {
   const lb = $("langBtn");
   if (lb) { lb.textContent = lang.toUpperCase(); lb.title = lang === "fr" ? "Switch to English" : "Passer en français"; }
   refreshConnText();
+  refreshResultInfoLang();
   updateRegisterLink();
+}
+function refreshResultInfoLang() {
+  // The results-preview line is set imperatively (status notes, empty text),
+  // so data-i18n can't own it. Retranslate only when it shows the "no results"
+  // placeholder in any language; live status text is left for the next poll.
+  const el = $("resultInfo");
+  if (!el) return;
+  const known = Object.values(I18N).map(d => d.noResults).filter(Boolean);
+  if (known.includes(el.textContent)) el.textContent = t("noResults");
 }
 function setLang(l) {
   lang = I18N[l] ? l : "en";
   try { localStorage.setItem("eat.lang", lang); } catch (e) {}
   applyI18n();
+  renderProductTabs();
   renderNav();
   renderCoverage();
   const vis = ["home", "section", "activity"].find(x => !$("view-" + x).classList.contains("hidden"));
@@ -154,7 +165,7 @@ function setLang(l) {
 }
 // Defaults; /api/config (backed by saas/.env) overrides, web/config.js is the fallback.
 const EAT_CFG = Object.assign(
-  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"], graphScopes: ["User.Read.All", "Organization.Read.All"] },
+  { clientId: "", msalSources: ["./msal-browser.min.js"], exoScopes: ["https://outlook.office365.com/.default"], graphScopes: ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All"] },
   window.EAT_CONFIG || {});
 fetch("api/config").then(r => r.json()).then(c => {
   if (c.clientId) EAT_CFG.clientId = c.clientId;
@@ -184,7 +195,8 @@ async function loadSections() {
   const r = await fetch(API + "/api/sections");
   if (!r.ok) throw new Error("API " + r.status);
   state.sections = await r.json();
-  renderNav(); renderCoverage(); showView("home");
+  initActiveProduct();
+  renderProductTabs(); renderNav(); renderCoverage(); showView("home");
   log(t("sectionsLoadedLog", { n: state.sections.length }));
 }
 
@@ -198,27 +210,21 @@ function markNav(id, cat) {
 }
 function renderNav() {
   const host = $("navGroups"); host.innerHTML = "";
+  // Left nav shows the active product tab only (plus the system entries).
+  const visible = state.sections.filter(s => productOf(s) === state.activeProduct);
   const cats = {};
-  state.sections.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
-  // System entries first, then one collapsible block per category,
-  // grouped under a product header (Exchange Online, Licensing, …).
+  visible.forEach(s => { (cats[s.category || "Other"] ||= []).push(s); });
+  // System entries first, then one collapsible block per category of the
+  // active product tab. No product header needed: the tab above says it.
   const groups = [{ cat: t("groupSys"), items: [
     { id: "__home", title: t("navConnection"), view: "home" },
     { id: "__activity", title: t("navActivity"), view: "activity" }
   ] }];
-  [["exo", "productExchangeOnline"], ["licensing", "productLicensing"]].forEach(([pk, key]) => {
-    Object.keys(cats).sort().forEach(cat => {
-      const items = cats[cat].filter(s => productOf(s) === pk).map(s => ({ id: s.id, title: s.navTitle }));
-      if (items.length) groups.push({ cat, items, product: t(key) });
-    });
+  Object.keys(cats).sort().forEach(cat => {
+    const items = cats[cat].map(s => ({ id: s.id, title: s.navTitle }));
+    if (items.length) groups.push({ cat, items });
   });
-  let lastProduct = null;
   groups.forEach(g => {
-    if (g.product && g.product !== lastProduct) {
-      const ph = document.createElement("div");
-      ph.className = "nav-section"; ph.textContent = g.product;
-      host.appendChild(ph); lastProduct = g.product;
-    }
     const block = document.createElement("div");
     block.className = "nav-block"; block.dataset.cat = g.cat;
     const head = document.createElement("button");
@@ -242,30 +248,89 @@ function renderNav() {
     });
     head.onclick = () => setCat(block, wrap.style.display === "none");
     block.appendChild(head); block.appendChild(wrap); host.appendChild(block);
-    setCat(block, false);
+    setCat(block, true);
   });
 }
 
 function productOf(s) {
-  // Nav + coverage group sections per product. New products (SharePoint,
-  // Teams…) get their own branch here; everything Exchange stays default.
-  return (s.category === "Licensing") ? "licensing" : "exo";
+  // Product comes from the API (section.Product). Fallback keeps old payloads
+  // working: Graph scope => Licensing, everything else => Exchange Online.
+  // New products (Teams, SharePoint…) need no frontend change: they appear as
+  // their own tab automatically.
+  if (s && s.product) return s.product;
+  if (s && (s.scope === "Graph" || s.category === "Licensing")) return "Licensing";
+  return "Exchange Online";
+}
+function productLabel(p) {
+  if (p === "Exchange Online") return t("productExchangeOnline");
+  if (p === "Licensing") return t("productLicensing");
+  return p || "";
+}
+function listProducts() {
+  // Stable order: Exchange Online first, Licensing last, anything else
+  // (Teams, future products…) alphabetical in between.
+  const seen = [...new Set(state.sections.map(productOf))];
+  const rank = p => p === "Exchange Online" ? 0 : p === "Licensing" ? 2 : 1;
+  return seen.sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
+}
+function initActiveProduct() {
+  let saved = "";
+  try { saved = localStorage.getItem("eat.product") || ""; } catch (e) {}
+  const products = listProducts();
+  state.activeProduct = products.includes(saved) ? saved : (products[0] || "Exchange Online");
+}
+function setActiveProduct(p) {
+  if (!p || p === state.activeProduct) return;
+  state.activeProduct = p;
+  try { localStorage.setItem("eat.product", p); } catch (e) {}
+  renderProductTabs(); renderNav(); renderCoverage(); applyTopSearch();
+  if (state.current && productOf(state.current) !== p) {
+    // Stay on the open section (its options/results are untouched); only the
+    // left nav refilters. Going home is one click away.
+  }
+}
+function renderProductTabs() {
+  const host = $("productTabs");
+  if (!host) return;
+  host.innerHTML = "";
+  listProducts().forEach(p => {
+    const b = document.createElement("button");
+    b.className = "product-tab" + (p === state.activeProduct ? " active" : "");
+    b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", p === state.activeProduct ? "true" : "false");
+    b.textContent = productLabel(p);
+    b.onclick = () => setActiveProduct(p);
+    host.appendChild(b);
+  });
+  host.style.display = listProducts().length ? "" : "none";
 }
 function renderCoverage() {
+  // Coverage lists EVERY product (Exchange Online, Licensing, future Teams…
+  // need no change here), one collapsed <details> per product. Collapsed by
+  // default; click the header to expand.
   $("coverageTitle").textContent = t("coverageTitle", { n: state.sections.length });
-  // One clear table: Section | Category | Product, grouped by product,
-  // then category, then section name. Same productOf() source as the menu.
-  const rows = [];
-  [["exo", "productExchangeOnline"], ["licensing", "productLicensing"]].forEach(([pk, key]) => {
-    state.sections
-      .filter(s => productOf(s) === pk)
-      .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.navTitle.localeCompare(b.navTitle))
-      .forEach(s => rows.push(
-        `<tr><td>${esc(s.navTitle)}</td><td>${esc(s.category || "Other")}</td><td>${esc(t(key))}</td></tr>`));
+  const host = $("coverage");
+  host.innerHTML = "";
+  listProducts().forEach(p => {
+    const list = state.sections
+      .filter(s => productOf(s) === p)
+      .sort((a, b) => (a.category || "").localeCompare(b.category || "") || a.navTitle.localeCompare(b.navTitle));
+    const det = document.createElement("details");
+    det.className = "cov-block";
+    const sum = document.createElement("summary");
+    sum.className = "cov-head";
+    sum.textContent = productLabel(p) + " — " + t("coverageTitle", { n: list.length });
+    det.appendChild(sum);
+    const rows = list.map(s =>
+      `<tr><td>${esc(s.navTitle)}</td><td>${esc(s.category || "Other")}</td></tr>`);
+    const tbl = document.createElement("table");
+    tbl.className = "cov";
+    tbl.innerHTML =
+      `<thead><tr><th>${esc(t("covSection"))}</th><th>${esc(t("covCategory"))}</th></tr></thead>` +
+      `<tbody>${rows.join("")}</tbody>`;
+    det.appendChild(tbl);
+    host.appendChild(det);
   });
-  $("coverage").innerHTML =
-    `<table class="cov"><thead><tr><th>${esc(t("covSection"))}</th><th>${esc(t("covCategory"))}</th><th>${esc(t("covProduct"))}</th></tr></thead>` +
-    `<tbody>${rows.join("")}</tbody></table>`;
 }
 
 function showView(v) {
@@ -277,6 +342,14 @@ function showView(v) {
 function openSection(id) {
   try {
   const s = state.sections.find(x => x.id === id); if (!s) return;
+  // If the section lives under another product tab (e.g. restoring a
+  // Licensing job while the Exchange tab is active), switch tabs first so
+  // the left nav stays consistent with the open section.
+  if (productOf(s) !== state.activeProduct) {
+    state.activeProduct = productOf(s);
+    try { localStorage.setItem("eat.product", state.activeProduct); } catch (e) {}
+    renderProductTabs(); renderNav(); renderCoverage();
+  }
   // Reopening the section of a known job resumes its live view instead of
   // wiping it (the job keeps running server-side either way).
   const resume = state.jobId && state.jobSection === id;
@@ -289,6 +362,9 @@ function openSection(id) {
   $("secSub").textContent = s.subtitle || "";
   $("filter").value = "";
   renderGroups("");
+  // Fresh open (not a job resume): sections with per-view defaults start on
+  // the selected view's set instead of the static option defaults.
+  if (!resume && applyViewDefaults()) renderGroups("");
   updateSlow();
   if (resume) { if (!state.poll) pollStart(); else fetchJobStatus(); }
   else { pollStop(); resetResults(); state.jobSection = null; state.jobStart = 0; }
@@ -335,6 +411,7 @@ function renderGroups(filter) {
       inp.onchange = () => {
         if (g.mode === "SingleChoice") {
           options.forEach(x => state.checks[g.key + "::" + x.value] = (x.value === o.value));
+          applyViewDefaults();
           renderGroups($("filter").value);
         } else state.checks[key] = inp.checked;
         updateSlow(); updateSelectAll();
@@ -349,6 +426,29 @@ function renderGroups(filter) {
   updateSelectAll();
 }
 
+function viewDefaultSet() {
+  // Returns the "group::value" list for the currently selected SingleChoice
+  // view (licenses-overview Per SKU vs Per product), or null when the section
+  // defines no per-view defaults.
+  const vd = state.current && state.current.viewDefaults;
+  if (!vd) return null;
+  for (const g of state.current.groups) {
+    if (g.mode !== "SingleChoice") continue;
+    const sel = (g.options || []).find(x => state.checks[g.key + "::" + x.value]);
+    if (sel && vd[sel.value]) return vd[sel.value];
+  }
+  return null;
+}
+function applyViewDefaults() {
+  const set = viewDefaultSet();
+  if (!set) return false;
+  const want = new Set(set);
+  state.current.groups.forEach(g => {
+    if (g.mode === "SingleChoice") return;
+    (g.options || []).forEach(o => { state.checks[g.key + "::" + o.value] = want.has(g.key + "::" + o.value); });
+  });
+  return true;
+}
 function updateSlow() {
   const slow = state.current.groups.some(g => (g.options || []).some(o => (o.slow || g.slow) && state.checks[g.key + "::" + o.value]));
   $("slowBadge").classList.toggle("hidden", !slow);
@@ -665,7 +765,7 @@ async function ensureGraphToken(silentOnly) {
   // silent so Exchange polling never pops a window.
   if (!state.msal || !state.msalAccount) return;
   if (state.graphToken && Date.now() < state.graphTokenExp - 5 * 60 * 1000) return;
-  const scopes = EAT_CFG.graphScopes || ["User.Read.All", "Organization.Read.All"];
+  const scopes = EAT_CFG.graphScopes || ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All"];
   try {
     const tok = await state.msal.acquireTokenSilent({ scopes, account: state.msalAccount });
     state.graphToken = tok.accessToken;
@@ -689,8 +789,8 @@ $("dlXlsx").onclick = () => window.open(API + "/api/jobs/" + state.jobId + "/dow
 document.querySelectorAll(".nav-item[data-view]").forEach(b => b.onclick = () => showView(b.dataset.view));
 
 // Top search filters the audit sections in the left nav (Enter opens the first match).
-$("topSearch").oninput = e => {
-  const q = e.target.value.trim().toLowerCase();
+function applyTopSearch() {
+  const q = ($("topSearch").value || "").trim().toLowerCase();
   document.querySelectorAll("#navGroups .nav-block").forEach(block => {
     const items = [...block.querySelectorAll(".nav-item")];
     let vis = 0;
@@ -700,9 +800,10 @@ $("topSearch").oninput = e => {
       if (show) vis++;
     });
     block.style.display = (vis || !q) ? "" : "none";
-    setCat(block, q ? vis > 0 : false);
+    setCat(block, q ? vis > 0 : true);
   });
-};
+}
+$("topSearch").oninput = () => applyTopSearch();
 $("topSearch").onkeydown = e => {
   if (e.key === "Enter") {
     const first = [...document.querySelectorAll("#navGroups .nav-item")].find(b => b.style.display !== "none");

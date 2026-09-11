@@ -1,6 +1,6 @@
-# Microsoft 365 Audit Tool (Exchange Online + Licensing)
+# Microsoft 365 Audit Tool (Exchange Online + Licensing + Teams)
 
-Exchange Online audit exports as a Dockerized SaaS: 27 audit sections (25 Exchange Online with selectable properties + 2 license sections via Microsoft Graph), `;`-delimited UTF-8 CSV + formatted XLSX export, Azure Portal-style web UI, single multi-tenant Entra app (tokens in tab session only: F5-safe, dropped on disconnect or tab close).
+Exchange Online audit exports as a Dockerized SaaS: 40 audit sections (25 Exchange Online with selectable properties + 4 license sections + 9 Teams sections + 2 SharePoint sections, via Microsoft Graph), `;`-delimited UTF-8 CSV + formatted XLSX export, Azure Portal-style web UI, single multi-tenant Entra app (tokens in tab session only: F5-safe, dropped on disconnect or tab close).
 
 Section definitions live in `saas/api/Shared/`, so the checkboxes and generated PowerShell always match the API that serves them.
 
@@ -12,7 +12,7 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 ```
 
 * `GET /api/sections` — section catalog (Online defaults, `slow` flags). Drives all checkboxes.
-* `POST /api/jobs` — validates `selection` against the allow-list (no raw PS accepted), builds the script with the shared `BuildScript()`, forwards to worker with the Bearer token(s) live from the tab session only. License sections (`Licensing` category, `scope: Graph`) additionally need the Graph token via `X-Graph-Token`.
+* `POST /api/jobs` — validates `selection` against the allow-list (no raw PS accepted), builds the script with the shared `BuildScript()`, forwards to worker with the Bearer token(s) live from the tab session only. Graph sections (`Licensing` + `Teams` categories, `scope: Graph`) additionally need the Graph token via `X-Graph-Token`.
 * `GET /api/jobs/{id}` — status + 200-row preview + log tail.
 * `GET /api/jobs/{id}/download?format=csv|xlsx` — export files.
 * Worker `POST /run` — EXO sections: `Connect-ExchangeOnline -AccessToken …` (or `Connect-IPPSSession` for protection), runs the script, `Export-Csv -Delimiter ';'`, disconnects, drops the token. License sections: `Invoke-RestMethod` against Microsoft Graph with `$env:EAT_GRAPH_TOKEN` (subscribedSkus + users), no EXO connection. Outputs stay on the worker until the API pulls them (`GET /file/{job}?kind=csv|log`, then `DELETE`); storages are never shared, so nothing persists past the containers.
@@ -20,7 +20,7 @@ web (nginx, Portal UI) -> api (.NET 8, :8080) -> worker (pwsh 7.4 + ExchangeOnli
 ## 1. One-time multi-tenant app registration (you, the publisher)
 
 1. Entra admin center (`entra.microsoft.com`) → **Identity** → **Applications** → **App registrations** → **New registration**: name `M365 Audit Tool`, supported account types **Accounts in any organizational directory (multitenant)**. Note the **Application (client) ID** → put it in `saas/.env` as `EAT_CLIENT_ID=`.
-2. API permissions (exact clicks) — still on your app page, left menu **Manage → API permissions** → **Add a permission** → tab **APIs my organization uses** → search `Office 365 Exchange Online` → select it → **Delegated permissions** → tick **`Exchange.Manage`** → **Add permissions**. Then **Add a permission** → **Microsoft Graph** → **Delegated permissions** → `User.Read` is already there by default, add **`User.Read.All`** + **`Organization.Read.All`** (used by the Licensing category: per-user assignments + subscribed SKUs). Finish with **Grant admin consent for [your org]** (green checkmarks). No application permissions, no cert needed for delegated flow.
+2. API permissions (exact clicks) — still on your app page, left menu **Manage → API permissions** → **Add a permission** → tab **APIs my organization uses** → search `Office 365 Exchange Online` → select it → **Delegated permissions** → tick **`Exchange.Manage`** → **Add permissions**. Then **Add a permission** → **Microsoft Graph** → **Delegated permissions** → `User.Read` is already there by default, add **`User.Read.All`** + **`Organization.Read.All`** (Licensing: per-user assignments + subscribed SKUs) + **`Group.Read.All`** + **`Team.ReadBasic.All`** + **`Channel.ReadBasic.All`** + **`TeamMember.Read.All`** + **`ChannelMember.Read.All`** + **`TeamsAppInstallation.ReadForTeam`** + **`TeamsTab.Read.All`** + **`Reports.Read.All`** + **`ChannelMessage.Read.All`** (Teams category: inventory, channels, channel memberships, members & owners, team apps, tabs, SharePoint sites, activity — also add each to `EAT_GRAPH_SCOPES`). Optional: **`AuditLog.Read.All`** (only for the "Last sign-in" column of Unlicensed users). Finish with **Grant admin consent for [your org]** (green checkmarks). No application permissions, no cert needed for delegated flow.
 3. Authentication — left menu **Manage → Authentication** → **Add a platform** → **Single-page application**, redirect URI `https://<your-web>/`, **Save**; then tick **Allow public client flows** → **Save**. The web app signs users in directly (MSAL + PKCE, no secret).
 4. Login library — Microsoft deprecated the MSAL CDN, so vendor the file once (any machine with Docker):
   ```bash
@@ -50,7 +50,7 @@ Real Exchange run: set `EAT_DEMO_MODE=false`, restart worker. The worker image p
 ## 3. Usage
 
 1. Open the web app → Home → enter your **work email (UPN)** → **Connect with Microsoft** and sign in. Tenant org is pre-filled from your email domain (editable). Tokens live in the tab session only (MSAL `sessionStorage`: F5-safe, never on disk); Disconnect or closing the tab drops them. No token copy-paste — the **Advanced** section keeps manual paste as fallback.
-2. Pick a section in the left nav (grouped by category, e.g. Mailboxes, Groups, Protection, Licensing). Each section offers property groups with Online defaults, `Filter`, `Select all` and an amber `Slow options` warning. The **Licensing** category needs the Graph consent from setup step 2 — without it, sign-in succeeds but license runs fail with a Graph 403 (see troubleshooting).
+2. Pick a section in the left nav (grouped by category, e.g. Mailboxes, Groups, Protection, Licensing, Teams). Each section offers property groups with Online defaults, `Filter`, `Select all` and an amber `Slow options` warning. The **Licensing** and **Teams** categories need the Graph consent from setup step 2 — without it, sign-in succeeds but runs fail with a Graph 403 (see troubleshooting).
 3. Press **RUN AUDIT**. **Smart mode** (first block, on by default — native on transport-rules) drops columns empty on every row — applied to all sections (dropped columns are listed in the job log). Poll `GET /api/jobs/{id}` every 3s; preview shows the first 200 rows.
 4. **Download CSV / XLSX**. CSV is `;`-delimited UTF-8 (multi-values `,`-joined); XLSX has bold header, filter, frozen top row.
 5. **Activity log** view shows the executed (redacted: `-AccessToken ***`, never the token) commands and job output.
@@ -69,7 +69,7 @@ curl -s localhost:8080/api/jobs/<jobId> -H "X-Tenant-Id: $ORG" | head -c 500
 curl -OJ localhost:8080/api/jobs/<jobId>/download?format=csv
 ```
 
-## 4. Coverage (Online + Graph licenses, 27 sections)
+## 4. Coverage (Online + Graph licenses + Graph Teams + Graph SharePoint, 40 sections)
 
 On-premises-only sections (`address-books`, `certificates`) are hidden in SaaS.
 
@@ -82,7 +82,10 @@ On-premises-only sections (`address-books`, `certificates`) are hidden in SaaS.
 | `org-sharing`, `address-policies`, `journal-rules`, `retention-policies`, `owa-policy`, `role-policies` | `Get-SharingPolicy/OrganizationRelationship/FederationTrust/OrganizationConfig/EmailAddressPolicy/JournalRule/RetentionPolicy(Tag)/OwaMailboxPolicy/RoleAssignmentPolicy/ManagementRoleAssignment` |
 | `protection-policies` | `Get-HostedContentFilter(Policy/Rule)`, `Get-HostedOutboundSpamFilter*`, `Get-MalwareFilter*`, `Get-AntiPhish*`, `Get-SafeLinks*`, `Get-SafeAttachment*`, `Get-DlpPolicy` via `Connect-IPPSSession` |
 | `pf-mailboxes`, `pf-hierarchy`, `mail-pf` | `Get-Mailbox -PublicFolder`, `Get-PublicFolder(-Statistics/ClientPermission)`, `Get-MailPublicFolder` |
-| `licenses-overview`, `licenses-users` (category `Licensing`, Graph — not EXO) | `GET /subscribedSkus` (SKU names, total/consumed units, service plans + provisioning status), `GET /users` (per-user SKU assignments, enabled/disabled service plans) |
+| `licenses-overview`, `licenses-users`, `licenses-unlicensed`, `licenses-groups` (category `Licensing`, Graph — not EXO) | `GET /subscribedSkus` (SKU display names via Microsoft licensing CSV with baked-in fallback, total/consumed units, capability status, service plans + provisioning status), `GET /users` (per-user SKU assignments, enabled/disabled service plans; unlicensed users via `assignedLicenses/$count eq 0`, optional last sign-in needs `AuditLog.Read.All`; group vs direct counts via `licenseAssignmentStates`), `GET /groups` (group-assigned licenses, needs `Group.Read.All`) |
+| `teams-inventory`, `teams-channels`, `teams-channel-memberships`, `teams-members`, `teams-apps`, `teams-tabs`, `teams-sites`, `teams-activity`, `teams-compliance` (category `Teams`, Graph — not EXO) | `GET /groups?$filter=resourceProvisioningOptions/Any(x:x eq 'Team')` (team identity, visibility, dynamic membership, created date), `GET /teams/{id}` (archived flag + guest/member/messaging/fun settings), `GET /teams/{id}/channels` + `/tabs` (channel/private/shared/tabs counts), `GET /teams/{id}/installedApps/$count` (apps count), `GET /groups/{id}/owners|members/$count` (owner/member/guest counts), `GET /groups/{id}/sites/root` (SharePoint URL), `GET /teams/{id}/channels` + `/filesFolder` + `/members` + `?$select=summary` (channel type, SharePoint folder, owner/member/guest counts; private/shared channel memberships with cached `/users/{id}` lookup for UPN/UserType), `GET /teams/{id}/installedApps?$expand=teamsApp,teamsAppDefinition` (app name, publisher, app ID, version, distribution + Microsoft-publisher filters), `GET /teams/{id}/channels/{id}/tabs?$expand=teamsApp` (tab name, app type, URL), `GET /groups/{id}/sites/root` (SharePoint URL, last modified) + `GET /groups/{id}/drive` (live storage quota) + usage report (site template + file count, ≤48h stale), `GET /teams/{id}/channels/{id}/messages?$top=1&$expand=replies` (latest message per team) |
+| `sharepoint-sites`, `sharepoint-subsites` (category `SharePoint`, Graph — not EXO) | Usage report as site enumeration (OneDrive personal skipped) + `GET /sites/{id}` (live title/URL/dates) + `/drive` (quota + owning group) + group owners/labels + Teams-membership join (site collections; empty MigrationWave/Decision working columns), recursive `/sites/{id}/sites` walk (subsites: IDs/URL/title/dates only — web config needs PnP/SPO, see `sp-migration/`) |
+| `spo-admin`, `pnp-deep-dive` (folder `sp-migration/`, admin workstation — not SaaS) | `Get-SPOSite` (lock, sharing, hub, quotas, deleted sites) + PnP per-web deep dive (webs, lists, fields, content types, pages, webparts, navigation, groups, unique permissions, features, regional settings) |
 
 ## 5. Security notes
 
@@ -95,8 +98,9 @@ On-premises-only sections (`address-books`, `certificates`) are hidden in SaaS.
 | Symptom | Fix |
 |---|---|
 | `401 missing Bearer` | Paste a fresh EXO token (audience `https://outlook.office365.com`), check `X-Tenant-Id`. |
-| `401 Missing X-Graph-Token` / Graph `403` on a Licensing run | Graph consent missing: grant `User.Read.All` + `Organization.Read.All` (README §1 step 2), then **Disconnect + Connect** so both tokens are re-issued, and relaunch. |
+| `401 Missing X-Graph-Token` / Graph `403` on a Licensing or Teams run | Graph consent missing: grant `User.Read.All` + `Organization.Read.All` + `Group.Read.All` + `Team.ReadBasic.All` + `Channel.ReadBasic.All` + `TeamMember.Read.All` + `ChannelMember.Read.All` + `TeamsAppInstallation.ReadForTeam` + `TeamsTab.Read.All` + `Reports.Read.All` + `ChannelMessage.Read.All` (README §1 step 2), then **Disconnect + Connect** so both tokens are re-issued, and relaunch. `403` on Unlicensed users with Last sign-in checked = `AuditLog.Read.All` not consented (or uncheck the column). |
 | `Unauthorized / access denied` | Auditor lacks Exchange read role; admin must consent once per tenant. |
 | Worker `pwsh exit 1` | See `Activity log` / `/data/<job>.log` tail in job status; usually throttling or a `Slow` per-object lookup — rerun with fewer options. |
 | No CSV produced | Check `.log`; in demo mode only 3 sample rows are written. |
 | XLSX missing | API converts after worker success; check API logs. Limits 1048575 rows / 16384 cols. |
+| Refresh the baked licensing CSV | Audits always try the live Microsoft CSV first; the worker image only carries a fallback copy. Plain rebuilds reuse the cached layer (no re-check). To force an online freshness check (conditional download — skipped with 304 if unchanged): `CSV_REFRESH_TOKEN=$(date +%Y%m%d) docker compose up -d --build worker`. |

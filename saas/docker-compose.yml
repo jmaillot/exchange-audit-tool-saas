@@ -9,7 +9,10 @@ services:
     volumes: [audit-data:/data]
     depends_on: [worker]
   worker:
-    build: ./worker
+    build:
+      context: ./worker
+      args:
+        CSV_REFRESH_TOKEN: ${CSV_REFRESH_TOKEN:-2026-01}
     environment:
       EAT_DATA_DIR: /data
       EAT_AUDIT_TIMEOUT_SEC: 1800

@@ -6,5 +6,5 @@ window.EAT_CONFIG = {
   clientId: "",
   msalSources: ["./msal-browser.min.js"],
   exoScopes: ["https://outlook.office365.com/.default"],
-  graphScopes: ["User.Read.All", "Organization.Read.All"]
+  graphScopes: ["User.Read.All", "Organization.Read.All", "Group.Read.All", "Team.ReadBasic.All", "Channel.ReadBasic.All", "TeamMember.Read.All", "ChannelMember.Read.All", "TeamsAppInstallation.ReadForTeam", "TeamsTab.Read.All", "Reports.Read.All", "ChannelMessage.Read.All", "Sites.Read.All"]
 };

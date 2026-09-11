@@ -67,7 +67,10 @@ services:
       - "traefik.enable=false"
 
   worker:
-    build: ./worker
+    build:
+      context: ./worker
+      args:
+        CSV_REFRESH_TOKEN: ${CSV_REFRESH_TOKEN:-2026-01}
     container_name: exchange-audit-worker
     env_file: .env
     security_opt:

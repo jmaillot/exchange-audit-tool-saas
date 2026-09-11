@@ -125,6 +125,12 @@ namespace ExchangeAuditTool
         public string IconKey;
         public AuditScope Scope;
         public string Category;
+        public string Product = "";
+        // Optional per-view checkbox defaults: SingleChoice option value ->
+        // list of "groupKey::optionValue" checked when that view is active
+        // (e.g. licenses-overview "skus" vs "products"). Absent = static
+        // option defaults apply.
+        public Dictionary<string, List<string>> ViewDefaults = new Dictionary<string, List<string>>();
         public List<AuditOptionGroup> Groups = new List<AuditOptionGroup>();
         public AuditScriptBuilder BuildScript;
         public string DefaultFileName = "audit.csv";
@@ -162,6 +168,16 @@ namespace ExchangeAuditTool
             SectionsOrganization.Register();
             SectionsProtection.Register();
             SectionsLicenses.Register();
+            SectionsTeams.Register();
+            SectionsSharePoint.Register();
+            // Product drives the web product tabs + left-nav filter. New
+            // products (Teams, SharePoint…) just set section.Product explicitly;
+            // everything else falls back here so old sections keep working.
+            foreach (var s in Sections)
+            {
+                if (!string.IsNullOrEmpty(s.Product)) continue;
+                s.Product = (s.Scope == AuditScope.Graph) ? "Licensing" : "Exchange Online";
+            }
         }
     }
 }
